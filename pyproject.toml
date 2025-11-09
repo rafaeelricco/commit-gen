@@ -1,0 +1,53 @@
+[project]
+name = "quick-assistant"
+version = "0.1.0"
+description = "Global CLI tool for productivity - quick translate, document extraction, and search operations."
+authors = [{ name = "Rafael Ricco", email = "rafaelricco10@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "google-genai>=1.26.0",
+    "pydantic>=2.11.7",
+    "requests>=2.31.0",
+    "charset-normalizer>=3.0.0",
+    "rich>=14.0.0",
+    "python-dotenv>=1.1.1",
+]
+
+[project.scripts]
+quick = "app:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.0",
+    "quick-assistant",
+    "ruff>=0.12.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "mypy>=1.17.0",
+]
+
+[tool.uv.sources]
+quick-assistant = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.mypy]
+mypy_path = "src"
+packages = ["common", "domains", "app"]
+explicit_package_bases = true
