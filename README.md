@@ -1,43 +1,43 @@
 ## Quick Assistant
 
-Ferramenta CLI para produtividade, focada em operações rápidas no dia a dia.
+CLI tool for productivity, focused on quick daily operations.
 
-### Instalação
+### Installation
 
 ```bash
 npm install -g @rafaeelricco/quick-assistant
 ```
 
-### Comando Global
+### Global Command
 
-Use `quick` no terminal para acessar as funcionalidades:
+Use `quick` in the terminal to access functionalities:
 
 #### 1. Quick Translate
-Tradução automática entre português ↔ inglês (ou outro idioma).
+Automatic translation between Portuguese ↔ English (or other language).
 ```bash
-quick translate "texto" [-l <idioma>] [-d]
+quick translate "text" [-l <language>] [-d]
 ```
 
 #### 2. Quick Extract
-Extrai texto de documentos (PDF, DOC, DOCX, PPTX, TXT).
+Extract text from documents (PDF, DOC, DOCX, PPTX, TXT).
 ```bash
-quick extract <arquivo> [-o <arquivo>] [--keep-format]
+quick extract <file> [-o <output-file>] [--keep-format]
 ```
 
 #### 3. Quick Search
-Busca definições, sinônimos, exemplos e informações.
+Search definitions, synonyms, examples and information.
 ```bash
-quick search "termo" [-w] [-s] [-e] [-t]
+quick search "term" [-w] [-s] [-e] [-t]
 ```
 
-### Características
-- Respostas rápidas (<3s)
-- Cache offline para traduções/definições comuns
-- Compatível com Windows, macOS, Linux
-- Output colorido e organizado
-- Mensagens de erro informativas
+### Features
+- Fast responses (<3s)
+- Offline cache for common translations/definitions
+- Compatible with Windows, macOS, Linux
+- Colored and organized output
+- Informative error messages
 
-### Exemplos
+### Examples
 - `quick translate "apple"`
-- `quick extract documento.pdf -o conteudo.txt`
+- `quick extract document.pdf -o content.txt`
 - `quick search "run" -e -s`
