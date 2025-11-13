@@ -6,13 +6,14 @@ A command-line interface tool for quick text translation using AI.
 """
 
 import sys
+import asyncio
 
 from dotenv import load_dotenv
+from typing import List, Optional 
 
 from common.arguments import (CommandType, ParsedArgs, TranslateCLIArguments, create_parser)
-from typing import List, Optional 
-from domains.translate.command.translate import Command
-
+from common.command.execute_command_handler import execute_command_handler
+from domains.translate.command.translate import Command, Handler
 
 class QuickAssistant:
     def __init__(self):
@@ -31,7 +32,7 @@ class QuickAssistant:
 
             match parsed_args.get_command_type():
                 case CommandType.TRANSLATE:
-                    return Command.execute(self.parser.parse_args(args))
+                    return asyncio.run(self._handle_translate(parsed_args.translate))
                 case CommandType.SEARCH:
                     print("Search functionality is not implemented yet.")
                     return 1
@@ -47,6 +48,36 @@ class QuickAssistant:
             return 1
         except Exception as e:
             print(f"Error: {e}")
+            return 1
+
+    async def _handle_translate(self, content: Optional[str]) -> int:
+        """
+        Handle translation command execution.
+        
+        Converts CLI input to command format and executes translation.
+        
+        Args:
+            content: The text content to translate
+            
+        Returns:
+            Exit code: 0 for success, 1 for failure
+        """
+        try:
+            if not content:
+                print("Error: Translation content is required")
+                return 1
+            
+            request_data = { "content": content, "target_language": "pt" }
+            
+            response, status_code = await execute_command_handler(Command, request_data, Handler)
+            
+            if status_code == 200:
+                return 0
+            else:
+                return 1
+                
+        except Exception as e:
+            print(f"Error: {str(e)}")
             return 1
 
 
