@@ -7,7 +7,7 @@ frozen model configuration, ensuring data integrity throughout the command proce
 """
 
 from abc import ABC
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class BaseCommand(BaseModel, ABC):
@@ -18,5 +18,4 @@ class BaseCommand(BaseModel, ABC):
     Commands represent write operations and must be frozen to ensure immutability.
     """
     
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
