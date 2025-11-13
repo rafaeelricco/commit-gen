@@ -7,9 +7,10 @@ terminal output formatting.
 """
 
 from typing import List
-from rich.console import Console
 from rich.markdown import Markdown
 from rich.padding import Padding
+
+from common.console import get_console
 
 class Format:
     @staticmethod
@@ -28,7 +29,7 @@ class Format:
             Format.markdown("Text", [2, 0, 2, 0])        # 2 lines above/below
             Format.markdown("Text", [0, 4, 1, 4])        # 4 spaces left/right, 1 line below
         """
-        console = Console()
+        console = get_console()
         markdown = Markdown(response)
         padded_content = Padding(markdown, (spacing[0], spacing[1], spacing[2], spacing[3]))
         console.print(padded_content)
