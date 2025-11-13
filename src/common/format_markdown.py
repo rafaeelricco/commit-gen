@@ -30,7 +30,7 @@ class Format:
             Format.markdown("Text", [0, 4, 1, 4])        # 4 spaces left/right, 1 line below
         """
         console = get_console()
-        markdown = Markdown(response)
+        markdown = Markdown(response, justify="full")
         padded_content = Padding(markdown, (spacing[0], spacing[1], spacing[2], spacing[3]))
         console.print(padded_content)
 
