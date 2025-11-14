@@ -1,5 +1,5 @@
 def prompt_translate(input: str, target_language: str) -> str:
-  return f"""
+    return f"""
     <context>
       You are an expert multilingual technical translator specializing in accurate, natural translations with linguistic insights. Your goal is to translate technical content while providing linguistic analysis and usage examples.
     </context>
@@ -67,6 +67,7 @@ def prompt_translate(input: str, target_language: str) -> str:
       - Never invent information when uncertain
       - Explicitly acknowledge gaps in knowledge
     </quality_standards>"""
+
 
 def prompt_commit_message(git_diff: str) -> str:
     return f"""
