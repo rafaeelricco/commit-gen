@@ -2,7 +2,7 @@
 Command-line argument parsing and configuration for the Quick Assistant CLI tool.
 
 This module provides utilities for parsing command-line arguments, defining command types,
-and configuring argument parsers for different CLI operations like translation and search.
+and configuring argument parsers for different CLI operations like translation.
 """
 
 import argparse
@@ -20,7 +20,6 @@ class CommandType(Enum):
     mapping command names to their string identifiers.
     """
     TRANSLATE = "translate"
-    SEARCH = "search"
     COMMIT = "commit"
     HELP = "help"
 
@@ -34,7 +33,6 @@ class ParsedArgs(BaseModel):
     model_config = ConfigDict(frozen=True)
     
     translate: Optional[str] = None
-    search: Optional[str] = None
     commit: Optional[str] = None
 
     def get_command_type(self) -> CommandType:
@@ -46,8 +44,6 @@ class ParsedArgs(BaseModel):
         """
         if self.translate:
             return CommandType.TRANSLATE
-        elif self.search:
-            return CommandType.SEARCH
         elif self.commit:
             return CommandType.COMMIT
         else:
@@ -81,35 +77,7 @@ class TranslateCLIArguments:
         }
 
 
-class SearchCLIArguments:
-    """
-    Configuration class for search CLI arguments.
 
-    Defines the command-line interface configuration for the search command,
-    including help text, examples, and argument definitions.
-    """
-
-    description = "Quick Assistant - CLI tool for searching"
-    flag = "--search"
-    help = "Search for a term in the web"
-    epilog = (
-        "Examples:\n"
-        "    quick --search \"latest news\"\n"
-        "    quick --search \"weather today\""
-    )
-
-    @classmethod
-    def get_config(cls) -> Dict[str, Any]:
-        """Return parser configuration for search arguments."""
-        return {
-            "prog": "quick",
-            "description": cls.description,
-            "epilog": cls.epilog,
-            "arguments": [
-                {"flag": cls.flag, "help": cls.help}
-            ]
-        }
-    
 def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
     """
     Create and configure a generic argument parser from configuration dictionary.

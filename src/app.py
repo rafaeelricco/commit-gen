@@ -26,16 +26,12 @@ class QuickAssistant:
         try:
             parsed_args = ParsedArgs(
                 translate=getattr(self.parser.parse_args(args), "translate", None),
-                search=getattr(self.parser.parse_args(args), "search", None),
                 commit=getattr(self.parser.parse_args(args), "commit", None)
             )
 
             match parsed_args.get_command_type():
                 case CommandType.TRANSLATE:
                     return asyncio.run(self._handle_translate(parsed_args.translate))
-                case CommandType.SEARCH:
-                    print("Search functionality is not implemented yet.")
-                    return 1
                 case CommandType.COMMIT:
                     print("Commit functionality is not implemented yet.")
                     return 1
