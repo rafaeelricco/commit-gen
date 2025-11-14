@@ -41,19 +41,30 @@ class Handler(BaseCommandHandler[Command]):
             print(f"No staged changes found. Use 'git add' to stage files.")
 
         with spinner("Generating…", spinner_style="dots"):
-            response = await genai.Client(api_key=api_key).aio.models.generate_content( 
+            response = await genai.Client(api_key=api_key).aio.models.generate_content(
                 model='models/gemini-flash-latest',
                 contents=git_diff.stdout,
-                config=types.GenerateContentConfig(system_instruction=prompt_commit_message(git_diff.stdout)),
+                config=types.GenerateContentConfig(
+                    system_instruction=prompt_commit_message(git_diff.stdout),
+                    response_mime_type="text/plain",
+                ),
             )
 
+        candidates = getattr(response, "candidates", []) or []
+        parts = []
+        for c in candidates:
+            content = getattr(c, "content", None)
+            if content and getattr(content, "parts", None):
+                parts.extend(content.parts)
 
-        if not response.text:
+        message_text = "".join(p.text for p in parts if getattr(p, "text", None))
+
+        if not message_text.strip():
             raise BadRequest(message="Empty response from translation service")
 
-        print('')
-        print(response.text)
-        print('')
+        print("")
+        print(message_text)
+        print("")
 
         return json_response(CommandResponse(message="Commit message generation not yet implemented"))
 
