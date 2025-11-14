@@ -18,6 +18,11 @@ class CommandType(Enum):
 
     Defines the different operations that can be performed by the CLI tool,
     mapping command names to their string identifiers.
+
+    Attributes:
+        TRANSLATE: Translation command for converting text between languages
+        COMMIT: Commit message generation command for git operations
+        HELP: Help command displayed when no valid command is provided
     """
     TRANSLATE = "translate"
     COMMIT = "commit"
@@ -57,23 +62,85 @@ class TranslateCLIArguments:
     including help text, examples, and argument definitions.
     """
 
-    description = "Quick Assistant - CLI tool for productivity"
     flag = "--translate"
     help = "Text to translate from any language to English"
+
+    @classmethod
+    def get_config(cls) -> Dict[str, Any]:
+        """
+        Return parser configuration for translate arguments.
+
+        Returns:
+            Dictionary containing parser configuration with keys:
+                - flag: Command flag string ("--translate")
+                - help: Help text describing the translation command's purpose
+        """
+        return {"flag": cls.flag, "help": cls.help}
+
+
+class CommitCLIArguments:
+    """
+    Configuration class for commit CLI arguments.
+
+    Defines the command-line interface configuration for the commit command,
+    including help text and argument definitions.
+    """
+
+    flag = "--commit"
+    help = "Generate a commit message"
+    choices = ["generate"]
+
+    @classmethod
+    def get_config(cls) -> Dict[str, Any]:
+        """
+        Return parser configuration for commit arguments.
+
+        Returns:
+            Dictionary containing parser configuration with keys:
+                - flag: Command flag string ("--commit")
+                - help: Help text describing the commit command's purpose
+                - choices: List of valid subcommands (e.g., ["generate"])
+        """
+        return {"flag": cls.flag, "help": cls.help, "choices": cls.choices}
+
+
+class QuickCLIConfig:
+    """
+    Main CLI configuration combining all command types.
+    
+    Provides unified configuration for the Quick Assistant CLI tool,
+    including program description, examples, and all command configurations.
+    """
+
+    description = "Quick Assistant - CLI tool for productivity"
     epilog = (
-      "Examples:\n"
-      "    quick --translate \"hello world\"\n"
-      "    quick --translate \"bonjour monde\""
+        "Examples:\n"
+        "    quick --translate \"hello world\"\n"
+        "    quick --translate \"bonjour monde\"\n"
+        "    quick --commit generate"
     )
 
     @classmethod
     def get_config(cls) -> Dict[str, Any]:
-        """Return parser configuration for translate arguments."""
+        """
+        Return complete parser configuration.
+
+        Returns:
+            Dictionary containing complete CLI configuration with keys:
+                - prog: Program name ("quick")
+                - description: CLI tool description text
+                - epilog: Usage examples displayed in help text
+                - commands: List of command configuration dictionaries from
+                           TranslateCLIArguments and CommitCLIArguments
+        """
         return {
             "prog": "quick",
             "description": cls.description,
             "epilog": cls.epilog,
-            "arguments": [{"flag": cls.flag, "help": cls.help}]
+            "commands": [
+                TranslateCLIArguments.get_config(),
+                CommitCLIArguments.get_config()
+            ]
         }
 
 
@@ -87,7 +154,7 @@ def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
             - prog: Program name (default: "quick")
             - description: Program description
             - epilog: Text to display after help
-            - arguments: List of argument dictionaries with "flag" and "help" keys
+            - commands: List of command dictionaries with "flag", "help", and optional "choices" keys
 
     Returns:
         Configured ArgumentParser instance ready for parsing CLI arguments.
@@ -99,8 +166,13 @@ def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
         epilog=config.get("epilog", "")
     )
 
-    arguments = config.get("arguments", [])
-    for arg in arguments:
-        parser.add_argument(arg["flag"], help=arg["help"])
+    commands = config.get("commands", [])
+    if commands:
+        group = parser.add_mutually_exclusive_group()
+        for cmd in commands:
+            if "choices" in cmd:
+                group.add_argument(cmd["flag"], help=cmd["help"], choices=cmd["choices"])
+            else:
+                group.add_argument(cmd["flag"], help=cmd["help"])
 
     return parser
