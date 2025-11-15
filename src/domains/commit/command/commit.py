@@ -31,22 +31,20 @@ class Handler(BaseCommandHandler[Command]):
 
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            raise BadRequest(
-                message="GOOGLE_API_KEY not found in environment. Set it in .env file"
-            )
+            raise BadRequest(message="GOOGLE_API_KEY not found in environment. Set it in .env file")
 
         if command.action != "generate":
             print(f"Unsupported commit action: {command.action}")
 
         path = os.getcwd()
-        git_diff = subprocess.run(
-            ["git", "diff", "--staged"], capture_output=True, text=True, cwd=path
-        )
+        git_diff = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True, cwd=path)
 
         if not git_diff.stdout.strip():
             print(f"No staged changes found. Use 'git add' to stage files.")
+
         console = Console()
         message_text = await self._generate_commit_message(api_key, git_diff.stdout)
+
         while True:
             console.print("")
             console.print(message_text)
@@ -62,40 +60,35 @@ class Handler(BaseCommandHandler[Command]):
                     ("Cancel", "cancel"),
                 ],
             )
+
             if not selection or selection == "cancel":
                 return json_response(
-                    CommandResponse(
-                        message="cancelled",
-                        commit_message=message_text,
-                        action="cancel",
-                    ),
+                    CommandResponse(message="cancelled", commit_message=message_text, action="cancel"),
                     200,
                 )
+
             if selection == "regenerate":
-                message_text = await self._generate_commit_message(
-                    api_key, git_diff.stdout
-                )
+                message_text = await self._generate_commit_message(api_key, git_diff.stdout)
                 continue
+
             if selection == "adjust":
                 adjustment = await text_input("What adjustments would you like?")
+
                 if not adjustment:
                     continue
-                message_text = await self._refine_commit_message(
-                    api_key, message_text, adjustment, git_diff.stdout
-                )
+
+                message_text = await self._refine_commit_message(api_key, message_text, adjustment, git_diff.stdout)
                 continue
+
             if selection == "commit":
                 success, output = self._perform_commit(message_text, path)
                 console.print(output)
                 status = 200 if success else 400
                 return json_response(
-                    CommandResponse(
-                        message="commit" if success else "commit_failed",
-                        commit_message=message_text,
-                        action="commit",
-                    ),
+                    CommandResponse(message="commit" if success else "commit_failed", commit_message=message_text, action="commit"),
                     status,
                 )
+
             if selection == "commit_push":
                 success_commit, output_commit = self._perform_commit(message_text, path)
                 console.print(output_commit)
@@ -108,9 +101,12 @@ class Handler(BaseCommandHandler[Command]):
                         ),
                         400,
                     )
+
                 success_push, output_push = self._perform_push(path)
                 console.print(output_push)
+                
                 status = 200 if success_push else 400
+
                 return json_response(
                     CommandResponse(
                         message="commit_push" if success_push else "push_failed",
