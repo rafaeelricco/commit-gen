@@ -1,3 +1,6 @@
+import questionary
+from prompt_toolkit.styles import Style
+
 def prompt_translate(input: str, target_language: str) -> str:
     return f"""
     <context>
@@ -176,3 +179,71 @@ def prompt_commit_message(git_diff: str) -> str:
         5. Inline code with single backticks is allowed in the bullet points.
       </output_instructions>
 """
+
+
+# Custom minimal style for prompts
+PROMPT_STYLE = Style(
+    [
+        ("question", "bold"),  # question text
+        ("pointer", "fg:#5f87d7 bold"),  # ❯ cursor
+        ("highlighted", "fg:#5f87d7 bold noreverse"),  # selected option (no bg)
+        ("answer", "fg:#5f87d7 bold"),  # final answer
+        ("text", ""),  # default text
+    ]
+)
+
+
+async def select_option(
+    prompt: str,
+    options: list[tuple[str, str]],
+) -> str | None:
+    """
+    Display numbered options with arrow-key navigation.
+
+    Args:
+        prompt: The question to display
+        options: List of (label, value) tuples
+        default: Default value to select (optional)
+
+    Returns:
+        Selected value or None if cancelled
+    """
+    # Prepend numbers to labels for visual scanning
+    numbered_choices = [
+        questionary.Choice(title=f"{i}. {label}", value=value)
+        for i, (label, value) in enumerate(options, 1)
+    ]
+
+    try:
+        result = await questionary.select(
+            prompt,
+            choices=numbered_choices,
+            qmark="",
+            pointer="❯",
+            style=PROMPT_STYLE,
+            use_arrow_keys=True,
+        ).ask_async()
+
+        return result
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
+async def text_input(prompt: str) -> str | None:
+    """
+    Prompt user for text input.
+
+    Args:
+        prompt: The question to display
+
+    Returns:
+        User input or None if cancelled
+    """
+    try:
+        result = await questionary.text(
+            prompt,
+            style=PROMPT_STYLE,
+        ).ask_async()
+        return result.strip() if result else None
+    except (KeyboardInterrupt, EOFError):
+        return None
