@@ -234,13 +234,14 @@ async def execute_commit(action: Optional[str]) -> int:
 
         request_data = {"action": action}
 
-        _, status_code = await execute_command_handler(Command, request_data, Handler)
+        response, status_code = await execute_command_handler(Command, request_data, Handler)
+
+        if status_code != 200:
+            error_msg = response.get('error', {}).get('message', 'Unknown error')
+            console.print(f"[red]{error_msg}[/red]")
 
         return 0 if status_code == 200 else 1
 
-    except BadRequest as e:
-        console.print(f"[red]{e.message}[/red]")
-        return 1
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
         return 1
