@@ -91,6 +91,7 @@ def prompt_commit_message(git_diff: str) -> str:
           - Use present-tense, imperative in the title (e.g. "add X", "fix Y", "refactor Z").
           - Avoid noise words like "small change" or "minor update".
           - No ticket IDs, no author names, no "WIP".
+          - Do NOT use conventional commit prefixes like `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `style:`, `test:`, `perf:`, `ci:`, `build:`. Start directly with the verb.
         4. Output format:
           - For SMALL changes:
             - Output ONLY a single-line summary (no body).
@@ -156,6 +157,11 @@ def prompt_commit_message(git_diff: str) -> str:
             - ...
           </commit_message>
         </example>
+
+        <negative_example>
+          <bad>feat: add user authentication</bad>
+          <good>add user authentication</good>
+        </negative_example>
 
       </examples>
 
