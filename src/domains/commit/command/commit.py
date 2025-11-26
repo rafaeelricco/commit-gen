@@ -26,6 +26,16 @@ class CommandResponse(BaseFrozen, ToJSON):
 class Handler(BaseCommandHandler[Command]):
     """Handler for commit command execution."""
 
+    def _is_git_repository(self, cwd: str) -> bool:
+        """Check if the given directory is inside a git repository."""
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+        return result.returncode == 0
+
     async def handle_command(self, command: Command) -> tuple[Dict[str, Any], int]:
         """Execute google-genai to analyze the diffs to generate a commit message."""
 
@@ -34,13 +44,20 @@ class Handler(BaseCommandHandler[Command]):
             raise BadRequest(message="GOOGLE_API_KEY not found in environment. Set it in .env file")
 
         if command.action != "generate":
-            print(f"Unsupported commit action: {command.action}")
+            raise BadRequest(message=f"Unsupported commit action: '{command.action}'. Use 'generate'.")
 
         path = os.getcwd()
+
+        if not self._is_git_repository(path):
+            raise BadRequest(message="Not a git repository. Initialize with 'git init' or navigate to a git project.")
+
         git_diff = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True, cwd=path)
 
+        if git_diff.returncode != 0:
+            raise BadRequest(message=f"Git error: {git_diff.stderr.strip() or 'Failed to get staged changes'}")
+
         if not git_diff.stdout.strip():
-            print(f"No staged changes found. Use 'git add' to stage files.")
+            raise BadRequest(message="No staged changes found. Use 'git add <file>' to stage files before generating a commit.")
 
         console = Console()
         message_text = await self._generate_commit_message(api_key, git_diff.stdout)
@@ -141,7 +158,7 @@ class Handler(BaseCommandHandler[Command]):
             text for p in parts if (text := getattr(p, "text", None))
         )
         if not message_text.strip():
-            raise BadRequest(message="Empty response from translation service")
+            raise BadRequest(message="Empty response from commit message generation")
         return message_text
 
     async def _refine_commit_message(
@@ -164,7 +181,7 @@ class Handler(BaseCommandHandler[Command]):
         parts = self._get_text_parts(response)
         refined = "".join(text for p in parts if (text := getattr(p, "text", None)))
         if not refined.strip():
-            raise BadRequest(message="Empty response from translation service")
+            raise BadRequest(message="Empty response from commit message refinement")
         return refined
 
     def _perform_commit(self, message_text: str, cwd: str) -> tuple[bool, str]:
@@ -208,17 +225,22 @@ async def execute_commit(action: Optional[str]) -> int:
     Returns:
         Exit code: 0 for success, 1 for failure
     """
+    console = Console()
+
     try:
         if not action:
-            print("Error: Commit action is required")
+            console.print("[red]Error: Commit action is required[/red]")
             return 1
 
         request_data = {"action": action}
 
-        response, status_code = await execute_command_handler(Command, request_data, Handler)
+        _, status_code = await execute_command_handler(Command, request_data, Handler)
 
         return 0 if status_code == 200 else 1
 
+    except BadRequest as e:
+        console.print(f"[red]{e.message}[/red]")
+        return 1
     except Exception as e:
-        print(f"Error: {str(e)}")
+        console.print(f"[red]Error: {str(e)}[/red]")
         return 1
