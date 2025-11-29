@@ -24,9 +24,11 @@ class CommandType(Enum):
         COMMIT: Commit message generation command for git operations
         HELP: Help command displayed when no valid command is provided
     """
+
     TRANSLATE = "translate"
     COMMIT = "commit"
     HELP = "help"
+
 
 class ParsedArgs(BaseModel):
     """
@@ -35,8 +37,9 @@ class ParsedArgs(BaseModel):
     Holds the parsed values from CLI arguments and provides methods to determine
     which command type was specified. Uses Pydantic's frozen model for immutability.
     """
+
     model_config = ConfigDict(frozen=True)
-    
+
     translate: Optional[str] = None
     commit: Optional[str] = None
 
@@ -53,6 +56,7 @@ class ParsedArgs(BaseModel):
             return CommandType.COMMIT
         else:
             return CommandType.HELP
+
 
 class TranslateCLIArguments:
     """
@@ -107,7 +111,7 @@ class CommitCLIArguments:
 class QuickCLIConfig:
     """
     Main CLI configuration combining all command types.
-    
+
     Provides unified configuration for the Quick Assistant CLI tool,
     including program description, examples, and all command configurations.
     """
@@ -115,8 +119,8 @@ class QuickCLIConfig:
     description = "Quick Assistant - CLI tool for productivity"
     epilog = (
         "Examples:\n"
-        "    quick --translate \"hello world\"\n"
-        "    quick --translate \"bonjour monde\"\n"
+        '    quick --translate "hello world"\n'
+        '    quick --translate "bonjour monde"\n'
         "    quick --commit generate"
     )
 
@@ -137,12 +141,8 @@ class QuickCLIConfig:
             "prog": "quick",
             "description": cls.description,
             "epilog": cls.epilog,
-            "commands": [
-                TranslateCLIArguments.get_config(),
-                CommitCLIArguments.get_config()
-            ]
+            "commands": [TranslateCLIArguments.get_config(), CommitCLIArguments.get_config()],
         }
-
 
 
 def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
@@ -163,7 +163,7 @@ def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
         prog=config.get("prog", "quick"),
         description=config.get("description", ""),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=config.get("epilog", "")
+        epilog=config.get("epilog", ""),
     )
 
     commands = config.get("commands", [])
