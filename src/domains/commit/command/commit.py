@@ -2,216 +2,465 @@ import os
 import subprocess
 import tempfile
 
-from typing import Any, Dict, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Literal, Optional, Union
 from google import genai
 from google.genai import types
 from common.base import BaseFrozen, ToJSON
 from common.command.base_command import BaseCommand
 from common.command.base_command_handler import BaseCommandHandler
-from common.command.execute_command_handler import BadRequest, json_response, execute_command_handler
+from common.command.execute_command_handler import json_response, execute_command_handler
 from common.loading import spinner
 from common.prompts import prompt_commit_message, select_option, text_input
+from common.result import Result, Ok, Err, async_try_catch
 from rich.console import Console
 
+
+# =============================================================================
+# Domain Types
+# =============================================================================
+
+Action = Literal["generate"]
+Selection = Literal["commit", "commit_push", "regenerate", "adjust", "cancel"]
+
+
+@dataclass(frozen=True)
+class MissingApiKey:
+    pass
+
+
+@dataclass(frozen=True)
+class NotGitRepo:
+    pass
+
+
+@dataclass(frozen=True)
+class GitError:
+    message: str
+
+
+@dataclass(frozen=True)
+class NoStagedChanges:
+    pass
+
+
+@dataclass(frozen=True)
+class EmptyAIResponse:
+    pass
+
+
+@dataclass(frozen=True)
+class UnsupportedAction:
+    action: str
+
+
+CommitError = Union[MissingApiKey, NotGitRepo, GitError, NoStagedChanges, EmptyAIResponse, UnsupportedAction]
+
+
+@dataclass(frozen=True)
+class CommitState:
+    api_key: str
+    cwd: str
+    diff: str
+    message: str
+
+    def with_message(self, new_message: str) -> "CommitState":
+        return CommitState(
+            api_key=self.api_key,
+            cwd=self.cwd,
+            diff=self.diff,
+            message=new_message,
+        )
+
+
+@dataclass(frozen=True)
+class RegenerateSignal:
+    state: CommitState
+
+
+@dataclass(frozen=True)
+class AdjustSignal:
+    state: CommitState
+
+
+LoopResult = Union["CommandResponse", RegenerateSignal, AdjustSignal]
+
+
+# =============================================================================
+# Command / Response
+# =============================================================================
 
 class Command(BaseCommand):
     """Commit command input."""
     action: str
+
 
 class CommandResponse(BaseFrozen, ToJSON):
     message: str
     commit_message: Optional[str] = None
     action: Optional[str] = None
 
-class Handler(BaseCommandHandler[Command]):
-    """Handler for commit command execution."""
 
-    def _is_git_repository(self, cwd: str) -> bool:
-        """Check if the given directory is inside a git repository."""
+# =============================================================================
+# Pure Validation Functions
+# =============================================================================
+
+def validate_api_key() -> Result[MissingApiKey, str]:
+    """Pure: returns Result with API key or MissingApiKey error."""
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return Result.err(MissingApiKey())
+    return Result.ok(api_key)
+
+
+def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
+    """Pure: checks if path is inside a git repository."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+        cwd=path,
+    )
+    if result.returncode != 0:
+        return Result.err(NotGitRepo())
+    return Result.ok(path)
+
+
+def get_staged_diff(path: str) -> Result[Union[GitError, NoStagedChanges], str]:
+    """Pure: returns staged diff or error."""
+    result = subprocess.run(
+        ["git", "diff", "--staged"],
+        capture_output=True,
+        text=True,
+        cwd=path,
+    )
+    if result.returncode != 0:
+        return Result.err(GitError(message=result.stderr.strip() or "Failed to get staged changes"))
+    if not result.stdout.strip():
+        return Result.err(NoStagedChanges())
+    return Result.ok(result.stdout)
+
+
+def validate_action(action: str) -> Result[UnsupportedAction, Action]:
+    """Pure: validates action is supported."""
+    if action != "generate":
+        return Result.err(UnsupportedAction(action=action))
+    return Result.ok("generate")
+
+
+# =============================================================================
+# Effect Wrappers
+# =============================================================================
+
+async def generate_message(api_key: str, diff: str) -> Result[Union[Exception, EmptyAIResponse], str]:
+    """Wraps AI call in Result."""
+    result = await async_try_catch(lambda: _generate_message_impl(api_key, diff))
+    match result.inner:
+        case Ok(value=msg):
+            if not msg.strip():
+                return Result.err(EmptyAIResponse())
+            return Result.ok(msg)
+        case Err(error=e):
+            return Result.err(e)
+
+
+async def _generate_message_impl(api_key: str, diff: str) -> str:
+    with spinner("Generating…", spinner_style="dots"):
+        response = await genai.Client(api_key=api_key).aio.models.generate_content(
+            model="models/gemini-flash-latest",
+            contents=diff,
+            config=types.GenerateContentConfig(
+                system_instruction=prompt_commit_message(diff),
+                response_mime_type="text/plain",
+            ),
+        )
+    return _extract_text(response)
+
+
+async def refine_message(
+    api_key: str, current_message: str, adjustment: str, diff: str
+) -> Result[Union[Exception, EmptyAIResponse], str]:
+    """Wraps refinement call in Result."""
+    result = await async_try_catch(lambda: _refine_message_impl(api_key, current_message, adjustment, diff))
+    match result.inner:
+        case Ok(value=msg):
+            if not msg.strip():
+                return Result.err(EmptyAIResponse())
+            return Result.ok(msg)
+        case Err(error=e):
+            return Result.err(e)
+
+
+async def _refine_message_impl(api_key: str, current_message: str, adjustment: str, diff: str) -> str:
+    system = (
+        "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. "
+        "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
+    )
+    contents = f"<diff>\n{diff}\n</diff>\n<current>\n{current_message}\n</current>\n<adjustment>\n{adjustment}\n</adjustment>"
+    with spinner("Refining…", spinner_style="dots"):
+        response = await genai.Client(api_key=api_key).aio.models.generate_content(
+            model="models/gemini-flash-latest",
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                response_mime_type="text/plain",
+            ),
+        )
+    return _extract_text(response)
+
+
+def _extract_text(response: types.GenerateContentResponse) -> str:
+    candidates = getattr(response, "candidates", ()) or ()
+    parts = tuple(
+        p
+        for c in candidates
+        for p in (getattr(getattr(c, "content", None), "parts", ()) or ())
+    )
+    return "".join(text for p in parts if (text := getattr(p, "text", None)))
+
+
+def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
+    """Pure: wraps git commit in Result."""
+    with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+        tmp.write(message)
+        tmp_path = tmp.name
+    try:
         result = subprocess.run(
-            ["git", "rev-parse", "--is-inside-work-tree"],
+            ["git", "commit", "-F", tmp_path],
             capture_output=True,
             text=True,
             cwd=cwd,
         )
-        return result.returncode == 0
+        output = (result.stdout or "") + (result.stderr or "")
+        if result.returncode != 0:
+            return Result.err(GitError(message=output.strip() or "Commit failed"))
+        return Result.ok(output)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+def perform_push(cwd: str) -> Result[GitError, str]:
+    """Pure: wraps git push in Result."""
+    result = subprocess.run(
+        ["git", "push"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode != 0:
+        return Result.err(GitError(message=output.strip() or "Push failed"))
+    return Result.ok(output)
+
+
+# =============================================================================
+# Action Handlers (Pattern Matching)
+# =============================================================================
+
+def handle_selection(
+    selection: Selection,
+    state: CommitState,
+) -> Result[CommitError, LoopResult]:
+    """Exhaustive pattern match on selection."""
+    match selection:
+        case "commit":
+            commit_result = perform_commit(state.message, state.cwd)
+            match commit_result.inner:
+                case Err(error=git_err):
+                    return Result[CommitError, LoopResult].err(git_err)
+                case Ok():
+                    return Result[CommitError, LoopResult].ok(
+                        CommandResponse(message="commit", commit_message=state.message, action="commit")
+                    )
+        case "commit_push":
+            commit_result = perform_commit(state.message, state.cwd)
+            match commit_result.inner:
+                case Err(error=git_err):
+                    return Result[CommitError, LoopResult].err(git_err)
+                case Ok():
+                    push_result = perform_push(state.cwd)
+                    match push_result.inner:
+                        case Err(error=push_err):
+                            return Result[CommitError, LoopResult].err(push_err)
+                        case Ok():
+                            return Result[CommitError, LoopResult].ok(
+                                CommandResponse(message="commit_push", commit_message=state.message, action="commit_push")
+                            )
+        case "regenerate":
+            return Result.ok(RegenerateSignal(state))
+        case "adjust":
+            return Result.ok(AdjustSignal(state))
+        case "cancel":
+            return Result.ok(CommandResponse(message="cancelled", commit_message=state.message, action="cancel"))
+
+
+# =============================================================================
+# Interaction Loop (Recursive)
+# =============================================================================
+
+async def interaction_loop(state: CommitState, console: Console) -> Result[CommitError, CommandResponse]:
+    """Recursive: regenerate/adjust restart loop with inline error retry."""
+    console.print("")
+    console.print(state.message)
+    console.print("")
+
+    raw_selection = await select_option(
+        "Select action:",
+        [
+            ("Commit & Push", "commit_push"),
+            ("Commit", "commit"),
+            ("Regenerate", "regenerate"),
+            ("Adjust", "adjust"),
+            ("Cancel", "cancel"),
+        ],
+    )
+
+    selection: Selection
+    if raw_selection in ("commit", "commit_push", "regenerate", "adjust", "cancel"):
+        selection = raw_selection  # type: ignore[assignment]
+    else:
+        selection = "cancel"
+    result = handle_selection(selection, state)
+
+    match result.inner:
+        case Ok(value=loop_result):
+            match loop_result:
+                case RegenerateSignal(state=s):
+                    gen_result = await generate_message(s.api_key, s.diff)
+                    match gen_result.inner:
+                        case Ok(value=new_msg):
+                            return await interaction_loop(s.with_message(new_msg), console)
+                        case Err(error=e):
+                            console.print(f"[red]Generation failed: {e}[/red]")
+                            return await interaction_loop(s, console)
+                case AdjustSignal(state=s):
+                    adj = await text_input("What adjustments would you like?")
+                    if not adj:
+                        return await interaction_loop(s, console)
+                    refine_result = await refine_message(s.api_key, s.message, adj, s.diff)
+                    match refine_result.inner:
+                        case Ok(value=new_msg):
+                            return await interaction_loop(s.with_message(new_msg), console)
+                        case Err(error=e):
+                            console.print(f"[red]Refinement failed: {e}[/red]")
+                            return await interaction_loop(s, console)
+                case CommandResponse() as response:
+                    return Result.ok(response)
+        case Err(error=e):
+            return Result.err(e)
+
+
+# =============================================================================
+# Main Flow Composition
+# =============================================================================
+
+async def execute_commit_flow(action: str, console: Console) -> Result[CommitError, CommandResponse]:
+    """Compose validation -> generation -> interaction loop."""
+    # Validate action
+    action_result = validate_action(action)
+    match action_result.inner:
+        case Err(error=action_err):
+            return Result.err(action_err)
+        case Ok():
+            pass
+
+    # Validate API key
+    api_key_result = validate_api_key()
+    match api_key_result.inner:
+        case Err(error=key_err):
+            return Result.err(key_err)
+        case Ok(value=api_key):
+            pass
+
+    # Validate git repo
+    cwd = os.getcwd()
+    repo_result = validate_git_repo(cwd)
+    match repo_result.inner:
+        case Err(error=repo_err):
+            return Result.err(repo_err)
+        case Ok():
+            pass
+
+    # Get staged diff
+    diff_result = get_staged_diff(cwd)
+    match diff_result.inner:
+        case Err(error=diff_err):
+            return Result.err(diff_err)
+        case Ok(value=diff):
+            pass
+
+    # Generate initial message
+    gen_result = await generate_message(api_key, diff)
+    match gen_result.inner:
+        case Err(error=gen_err):
+            match gen_err:
+                case EmptyAIResponse():
+                    return Result.err(gen_err)
+                case _:
+                    return Result.err(GitError(message=str(gen_err)))
+        case Ok(value=message):
+            pass
+
+    # Run interaction loop
+    initial_state = CommitState(api_key=api_key, cwd=cwd, diff=diff, message=message)
+    return await interaction_loop(initial_state, console)
+
+
+# =============================================================================
+# Error to Response Mapping
+# =============================================================================
+
+def error_to_response(error: CommitError) -> tuple[Dict[str, Any], int]:
+    """Map domain errors to HTTP responses."""
+    match error:
+        case MissingApiKey():
+            msg = "GOOGLE_API_KEY not found in environment. Set it in .env file"
+        case NotGitRepo():
+            msg = "Not a git repository. Initialize with 'git init' or navigate to a git project."
+        case GitError(message=m):
+            msg = f"Git error: {m}"
+        case NoStagedChanges():
+            msg = "No staged changes found. Use 'git add <file>' to stage files before generating a commit."
+        case EmptyAIResponse():
+            msg = "Empty response from commit message generation"
+        case UnsupportedAction(action=a):
+            msg = f"Unsupported commit action: '{a}'. Use 'generate'."
+
+    return {"error": {"message": msg}}, 400
+
+
+# =============================================================================
+# Handler Adapter
+# =============================================================================
+
+class Handler(BaseCommandHandler[Command]):
+    """Handler for commit command execution."""
 
     async def handle_command(self, command: Command) -> tuple[Dict[str, Any], int]:
         """Execute google-genai to analyze the diffs to generate a commit message."""
-
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            raise BadRequest(message="GOOGLE_API_KEY not found in environment. Set it in .env file")
-
-        if command.action != "generate":
-            raise BadRequest(message=f"Unsupported commit action: '{command.action}'. Use 'generate'.")
-
-        path = os.getcwd()
-
-        if not self._is_git_repository(path):
-            raise BadRequest(message="Not a git repository. Initialize with 'git init' or navigate to a git project.")
-
-        git_diff = subprocess.run(["git", "diff", "--staged"], capture_output=True, text=True, cwd=path)
-
-        if git_diff.returncode != 0:
-            raise BadRequest(message=f"Git error: {git_diff.stderr.strip() or 'Failed to get staged changes'}")
-
-        if not git_diff.stdout.strip():
-            raise BadRequest(message="No staged changes found. Use 'git add <file>' to stage files before generating a commit.")
-
         console = Console()
-        message_text = await self._generate_commit_message(api_key, git_diff.stdout)
+        result = await execute_commit_flow(command.action, console)
 
-        while True:
-            console.print("")
-            console.print(message_text)
-            console.print("")
+        match result.inner:
+            case Ok(value=response):
+                # Determine status based on response message
+                status = 200 if response.message in ("commit", "commit_push", "cancelled") else 400
+                if response.message == "commit_failed":
+                    status = 400
+                elif response.message == "push_failed":
+                    status = 400
+                console.print((response.commit_message or "") if response.message not in ("cancelled",) else "")
+                return json_response(response, status)
+            case Err(error=e):
+                return error_to_response(e)
 
-            selection = await select_option(
-                "Select action:",
-                [
-                    ("Commit & Push", "commit_push"),
-                    ("Commit", "commit"),
-                    ("Regenerate", "regenerate"),
-                    ("Adjust", "adjust"),
-                    ("Cancel", "cancel"),
-                ],
-            )
 
-            if not selection or selection == "cancel":
-                return json_response(
-                    CommandResponse(message="cancelled", commit_message=message_text, action="cancel"),
-                    200,
-                )
-
-            if selection == "regenerate":
-                message_text = await self._generate_commit_message(api_key, git_diff.stdout)
-                continue
-
-            if selection == "adjust":
-                adjustment = await text_input("What adjustments would you like?")
-
-                if not adjustment:
-                    continue
-
-                message_text = await self._refine_commit_message(api_key, message_text, adjustment, git_diff.stdout)
-                continue
-
-            if selection == "commit":
-                success, output = self._perform_commit(message_text, path)
-                console.print(output)
-                status = 200 if success else 400
-                return json_response(
-                    CommandResponse(message="commit" if success else "commit_failed", commit_message=message_text, action="commit"),
-                    status,
-                )
-
-            if selection == "commit_push":
-                success_commit, output_commit = self._perform_commit(message_text, path)
-                console.print(output_commit)
-                if not success_commit:
-                    return json_response(
-                        CommandResponse(
-                            message="commit_failed",
-                            commit_message=message_text,
-                            action="commit_push",
-                        ),
-                        400,
-                    )
-
-                success_push, output_push = self._perform_push(path)
-                console.print(output_push)
-                
-                status = 200 if success_push else 400
-
-                return json_response(
-                    CommandResponse(
-                        message="commit_push" if success_push else "push_failed",
-                        commit_message=message_text,
-                        action="commit_push",
-                    ),
-                    status,
-                )
-
-    def _get_text_parts(
-        self, response: types.GenerateContentResponse
-    ) -> tuple[types.Part, ...]:
-        candidates = getattr(response, "candidates", ()) or ()
-        return tuple(
-            p
-            for c in candidates
-            for p in (getattr(getattr(c, "content", None), "parts", ()) or ())
-        )
-
-    async def _generate_commit_message(self, api_key: str, diff: str) -> str:
-        with spinner("Generating…", spinner_style="dots"):
-            response = await genai.Client(api_key=api_key).aio.models.generate_content(
-                model="models/gemini-flash-latest",
-                contents=diff,
-                config=types.GenerateContentConfig(
-                    system_instruction=prompt_commit_message(diff),
-                    response_mime_type="text/plain",
-                ),
-            )
-        parts = self._get_text_parts(response)
-        message_text = "".join(
-            text for p in parts if (text := getattr(p, "text", None))
-        )
-        if not message_text.strip():
-            raise BadRequest(message="Empty response from commit message generation")
-        return message_text
-
-    async def _refine_commit_message(
-        self, api_key: str, current_message: str, adjustment: str, diff: str
-    ) -> str:
-        system = (
-            "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. "
-            "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
-        )
-        contents = f"<diff>\n{diff}\n</diff>\n<current>\n{current_message}\n</current>\n<adjustment>\n{adjustment}\n</adjustment>"
-        with spinner("Refining…", spinner_style="dots"):
-            response = await genai.Client(api_key=api_key).aio.models.generate_content(
-                model="models/gemini-flash-latest",
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    response_mime_type="text/plain",
-                ),
-            )
-        parts = self._get_text_parts(response)
-        refined = "".join(text for p in parts if (text := getattr(p, "text", None)))
-        if not refined.strip():
-            raise BadRequest(message="Empty response from commit message refinement")
-        return refined
-
-    def _perform_commit(self, message_text: str, cwd: str) -> tuple[bool, str]:
-        with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
-            tmp.write(message_text)
-            tmp_path = tmp.name
-        try:
-            result = subprocess.run(
-                ["git", "commit", "-F", tmp_path],
-                capture_output=True,
-                text=True,
-                cwd=cwd,
-            )
-            success = result.returncode == 0
-            output = (result.stdout or "") + (result.stderr or "")
-            return success, output
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
-
-    def _perform_push(self, cwd: str) -> tuple[bool, str]:
-        result = subprocess.run(
-            ["git", "push"], capture_output=True, text=True, cwd=cwd
-        )
-        success = result.returncode == 0
-        output = (result.stdout or "") + (result.stderr or "")
-        return success, output
-
+# =============================================================================
+# CLI Entry Point
+# =============================================================================
 
 async def execute_commit(action: Optional[str]) -> int:
     """
