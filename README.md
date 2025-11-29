@@ -84,6 +84,12 @@ AI-powered git commit message generation with interactive flow.
 quick commit
 ```
 
+#### Doctor
+Diagnose installation and PATH issues (especially helpful on Windows; it checks the `Scripts` and `pipx` paths).
+```bash
+quick doctor
+```
+
 ### Features
 - Fast AI-powered responses
 - Colored and organized output
