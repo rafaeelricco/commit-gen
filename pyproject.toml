@@ -70,7 +70,6 @@ split-on-trailing-comma = false
 version_toml = ["pyproject.toml:project.version"]
 branch = "main"
 commit_message = "chore(release): {version}"
-build_command = "uv build"
 upload_to_pypi = false
 
 [tool.semantic_release.commit_parser_options]
