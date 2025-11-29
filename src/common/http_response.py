@@ -10,7 +10,9 @@ from common.errors import Fail, Forbidden, Unauthorized, BadRequest, InternalSer
 from common.json import to_json
 
 
-def to_response(failure: Union[Fail, Forbidden, Unauthorized, BadRequest, InternalServerError]) -> tuple[Dict[str, Any], int]:
+def to_response(
+    failure: Union[Fail, Forbidden, Unauthorized, BadRequest, InternalServerError],
+) -> tuple[Dict[str, Any], int]:
     """
     Convert application error types to HTTP response tuples.
 
@@ -27,19 +29,19 @@ def to_response(failure: Union[Fail, Forbidden, Unauthorized, BadRequest, Intern
     """
     match failure:
         case Fail():
-            content = {'error': {'message': failure.message, 'details': failure.details}}
+            content = {"error": {"message": failure.message, "details": failure.details}}
             return content, failure.code
         case Forbidden():
-            content = {'error': {'message': failure.message}}
+            content = {"error": {"message": failure.message}}
             return content, 403
         case Unauthorized():
-            content = {'error': {'message': failure.message}}
+            content = {"error": {"message": failure.message}}
             return content, 401
         case BadRequest():
-            content = {'error': {'message': failure.message, 'details': failure.details}}
+            content = {"error": {"message": failure.message, "details": failure.details}}
             return content, 400
         case InternalServerError():
-            content = {'error': {'message': failure.message}}
+            content = {"error": {"message": failure.message}}
             return content, 500
 
 
@@ -50,8 +52,10 @@ class TranslateResponse(TypedDict):
     Defines the expected format for responses from translation endpoints,
     ensuring type safety and consistent response structure.
     """
+
     translation: str
     success: bool
+
 
 def json_response(data: Union[Dict[str, Any], Any], status: int = 200) -> tuple[Dict[str, Any], int]:
     """

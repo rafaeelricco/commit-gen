@@ -10,7 +10,7 @@ from typing import Type, TypeVar, Dict, Any
 from common.result import Result, Ok, Err
 from pydantic import BaseModel, ValidationError
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
 
 
 def try_parse_json(model_type: Type[T], data: Dict[str, Any]) -> Result[str, T]:

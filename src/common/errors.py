@@ -12,6 +12,7 @@ from typing import Optional, Any
 @dataclass(frozen=True)
 class Fail(Exception):
     """General failure with status code."""
+
     code: int
     message: str
     details: Optional[Any] = None
@@ -20,18 +21,21 @@ class Fail(Exception):
 @dataclass(frozen=True)
 class Forbidden(Exception):
     """403 Forbidden error."""
+
     message: str
 
 
 @dataclass(frozen=True)
 class Unauthorized(Exception):
     """401 Unauthorized error."""
+
     message: str
 
 
 @dataclass(frozen=True)
 class BadRequest(Exception):
     """400 Bad Request error."""
+
     message: str
     details: Optional[Any] = None
 
@@ -39,6 +43,7 @@ class BadRequest(Exception):
 @dataclass(frozen=True)
 class InternalServerError(Exception):
     """500 Internal Server Error."""
+
     message: str
 
 

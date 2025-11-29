@@ -1,6 +1,7 @@
 import questionary
 from prompt_toolkit.styles import Style
 
+
 def prompt_translate(input: str, target_language: str) -> str:
     return f"""
     <context>
@@ -199,10 +200,7 @@ PROMPT_STYLE = Style(
 )
 
 
-async def select_option(
-    prompt: str,
-    options: list[tuple[str, str]],
-) -> str | None:
+async def select_option(prompt: str, options: list[tuple[str, str]]) -> str | None:
     """
     Display numbered options with arrow-key navigation.
 
@@ -216,18 +214,12 @@ async def select_option(
     """
     # Prepend numbers to labels for visual scanning
     numbered_choices = [
-        questionary.Choice(title=f"{i}. {label}", value=value)
-        for i, (label, value) in enumerate(options, 1)
+        questionary.Choice(title=f"{i}. {label}", value=value) for i, (label, value) in enumerate(options, 1)
     ]
 
     try:
         result = await questionary.select(
-            prompt,
-            choices=numbered_choices,
-            qmark="",
-            pointer="❯",
-            style=PROMPT_STYLE,
-            use_arrow_keys=True,
+            prompt, choices=numbered_choices, qmark="", pointer="❯", style=PROMPT_STYLE, use_arrow_keys=True
         ).ask_async()
 
         return result
@@ -246,10 +238,7 @@ async def text_input(prompt: str) -> str | None:
         User input or None if cancelled
     """
     try:
-        result = await questionary.text(
-            prompt,
-            style=PROMPT_STYLE,
-        ).ask_async()
+        result = await questionary.text(prompt, style=PROMPT_STYLE).ask_async()
         return result.strip() if result else None
     except (KeyboardInterrupt, EOFError):
         return None

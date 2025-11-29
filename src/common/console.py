@@ -9,10 +9,11 @@ from rich.console import Console
 
 _console: Console | None = None
 
+
 def get_console() -> Console:
     """
     Return singleton Console instance.
-    
+
     Returns:
         Shared Console for all Rich output operations
     """
