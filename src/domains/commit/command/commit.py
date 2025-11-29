@@ -118,7 +118,8 @@ def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
     """Pure: checks if path is inside a git repository."""
     result = subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
-        text=True,
+        capture_output=True,
+        text=False,
         cwd=path,
     )
     if result.returncode != 0:
@@ -456,9 +457,13 @@ class Handler(BaseCommandHandler[Command]):
 
         match result.inner:
             case Ok(value=response):
+                # Determine status based on response message
                 status = 200 if response.message in ("commit", "commit_push", "cancelled") else 400
-                if response.git_output:
-                    console.print(response.git_output)
+                if response.message == "commit_failed":
+                    status = 400
+                elif response.message == "push_failed":
+                    status = 400
+                console.print((response.commit_message or "") if response.message not in ("cancelled",) else "")
                 return json_response(response, status)
             case Err(error=e):
                 return error_to_response(e)
