@@ -457,13 +457,9 @@ class Handler(BaseCommandHandler[Command]):
 
         match result.inner:
             case Ok(value=response):
-                # Determine status based on response message
                 status = 200 if response.message in ("commit", "commit_push", "cancelled") else 400
-                if response.message == "commit_failed":
-                    status = 400
-                elif response.message == "push_failed":
-                    status = 400
-                console.print((response.commit_message or "") if response.message not in ("cancelled",) else "")
+                if response.git_output:
+                    console.print(response.git_output)
                 return json_response(response, status)
             case Err(error=e):
                 return error_to_response(e)
