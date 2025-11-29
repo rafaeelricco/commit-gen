@@ -13,7 +13,7 @@ from packaging.version import Version
 
 PACKAGE_NAME = "quick-assistant"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-CHECK_INTERVAL = 3600  # 1 hour
+CHECK_INTERVAL = 3600 * 24  # 24 hours
 CACHE_FILE = Path.home() / ".quick-assistant" / "update-cache.json"
 
 
@@ -93,26 +93,25 @@ def check_and_update() -> None:
 
 
 def execute_update() -> int:
-    """Execute manual update command."""
+    """Manual update command."""
     try:
         current = get_current_version()
     except Exception:
-        print("Failed to get current version.")
+        print("Error: Could not determine current version.")
         return 1
 
     latest = get_latest_version()
-
     if latest is None:
-        print("Failed to check for updates.")
+        print("Error: Could not fetch latest version from PyPI.")
         return 1
 
     if Version(latest) <= Version(current):
-        print(f"Already up to date (v{current})")
+        print(f"Already at latest version ({current}).")
         return 0
 
     print(f"Updating quick-assistant {current} → {latest}...")
     if update_package():
-        print("Update complete.")
+        print("Update complete!")
         return 0
     else:
         print("Update failed.")
