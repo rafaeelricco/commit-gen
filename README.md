@@ -12,6 +12,28 @@ pipx install quick-assistant
 pip install quick-assistant
 ```
 
+### Windows Users
+
+If `quick` command is not recognized after installation:
+
+**Option 1: Using pipx (recommended)**
+```powershell
+pipx ensurepath
+# Restart your terminal
+```
+
+**Option 2: Using pip**
+```powershell
+# Add Python Scripts to PATH (adjust Python version as needed)
+setx PATH "%PATH%;%USERPROFILE%\AppData\Local\Programs\Python\Python312\Scripts"
+# Restart your terminal
+```
+
+**Verify installation:**
+```powershell
+quick doctor
+```
+
 ### Requirements
 
 **Option 1: Run setup (recommended)**
@@ -67,6 +89,7 @@ quick commit
 - `quick setup` - Configure API key and commit style
 - `quick commit` - Generate AI commit message
 - `quick update` - Update to latest version
+- `quick doctor` - Diagnose installation issues (Windows PATH)
 
 ### Uninstall
 

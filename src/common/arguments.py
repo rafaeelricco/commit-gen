@@ -9,6 +9,7 @@ class CommandType(Enum):
     COMMIT = "commit"
     UPDATE = "update"
     SETUP = "setup"
+    DOCTOR = "doctor"
     HELP = "help"
 
 
@@ -25,6 +26,8 @@ class ParsedArgs(BaseModel):
                 return CommandType.UPDATE
             case "setup":
                 return CommandType.SETUP
+            case "doctor":
+                return CommandType.DOCTOR
             case _:
                 return CommandType.HELP
 
@@ -48,5 +51,6 @@ def create_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("commit", help="Generate a commit message")
     subparsers.add_parser("update", help="Update quick-assistant to the latest version")
     subparsers.add_parser("setup", help="Configure quick-assistant")
+    subparsers.add_parser("doctor", help="Diagnose installation and PATH issues")
 
     return parser
