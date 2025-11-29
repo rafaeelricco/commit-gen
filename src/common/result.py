@@ -6,7 +6,7 @@ functional composition and eliminating the need for try-catch blocks. It support
 mapping, chaining, and traversal operations for robust error handling patterns.
 """
 
-from typing import TypeVar, Generic, Callable, Union, List, Any
+from typing import TypeVar, Generic, Callable, Union, List, Any, Awaitable
 from dataclasses import dataclass
 
 F = TypeVar('F')  # Failure type
@@ -128,4 +128,24 @@ def safe(func: Callable[..., S]) -> Callable[..., Result[Exception, S]]:
     """
     def wrapper(*args: Any, **kwargs: Any) -> Result[Exception, S]:
         return try_catch(lambda: func(*args, **kwargs))
+    return wrapper
+
+
+async def async_try_catch(func: Callable[[], Awaitable[S]]) -> Result[Exception, S]:
+    """
+    Execute an async function and wrap the result in Result type.
+    Captures any exception and returns it as Err.
+    """
+    try:
+        return Result(Ok(await func()))
+    except Exception as e:
+        return Result(Err(e))
+
+
+def async_safe(func: Callable[..., Awaitable[S]]) -> Callable[..., Awaitable[Result[Exception, S]]]:
+    """
+    Decorator that wraps an async function to return Result instead of raising exceptions.
+    """
+    async def wrapper(*args: Any, **kwargs: Any) -> Result[Exception, S]:
+        return await async_try_catch(lambda: func(*args, **kwargs))
     return wrapper
