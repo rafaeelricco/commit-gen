@@ -22,11 +22,13 @@ class CommandType(Enum):
     Attributes:
         TRANSLATE: Translation command for converting text between languages
         COMMIT: Commit message generation command for git operations
+        UPDATE: Update command for self-updating the CLI tool
         HELP: Help command displayed when no valid command is provided
     """
 
     TRANSLATE = "translate"
     COMMIT = "commit"
+    UPDATE = "update"
     HELP = "help"
 
 
@@ -42,6 +44,7 @@ class ParsedArgs(BaseModel):
 
     translate: Optional[str] = None
     commit: Optional[str] = None
+    update: Optional[bool] = None
 
     def get_command_type(self) -> CommandType:
         """
@@ -54,6 +57,8 @@ class ParsedArgs(BaseModel):
             return CommandType.TRANSLATE
         elif self.commit:
             return CommandType.COMMIT
+        elif self.update:
+            return CommandType.UPDATE
         else:
             return CommandType.HELP
 
@@ -108,6 +113,18 @@ class CommitCLIArguments:
         return {"flag": cls.flag, "help": cls.help, "choices": cls.choices}
 
 
+class UpdateCLIArguments:
+    """Configuration class for update CLI arguments."""
+
+    flag = "--update"
+    help = "Update quick-assistant to the latest version"
+
+    @classmethod
+    def get_config(cls) -> Dict[str, Any]:
+        """Return parser configuration for update arguments."""
+        return {"flag": cls.flag, "help": cls.help, "action": "store_true"}
+
+
 class QuickCLIConfig:
     """
     Main CLI configuration combining all command types.
@@ -136,7 +153,7 @@ class QuickCLIConfig:
             "prog": "quick",
             "description": cls.description,
             "epilog": cls.epilog,
-            "commands": [TranslateCLIArguments.get_config(), CommitCLIArguments.get_config()],
+            "commands": [TranslateCLIArguments.get_config(), CommitCLIArguments.get_config(), UpdateCLIArguments.get_config()],
         }
 
 
@@ -167,6 +184,8 @@ def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
         for cmd in commands:
             if "choices" in cmd:
                 group.add_argument(cmd["flag"], help=cmd["help"], choices=cmd["choices"])
+            elif "action" in cmd:
+                group.add_argument(cmd["flag"], help=cmd["help"], action=cmd["action"])
             else:
                 group.add_argument(cmd["flag"], help=cmd["help"])
 
