@@ -71,7 +71,11 @@ def load_config() -> Result[ConfigError, Config]:
         case Err(error=e):
             return Result.err(ConfigParseError(message=str(e)))
         case Ok(value=data):
-            pass
+            try:
+                # Ensure enum fields are validated before creating the Config model
+                data["commit_convention"] = CommitConvention(data["commit_convention"])
+            except (KeyError, ValueError) as e:
+                return Result.err(ConfigParseError(message=str(e)))
 
     validate_result = try_catch(lambda: Config(**data))
     match validate_result.inner:
