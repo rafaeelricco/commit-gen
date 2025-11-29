@@ -8,36 +8,30 @@ CLI tool for productivity, focused on quick daily operations.
 npm install -g @rafaeelricco/quick-assistant
 ```
 
-### Global Command
+### Requirements
 
-Use `quick` in the terminal to access functionalities:
+- `GOOGLE_API_KEY` environment variable (Google Gemini API)
 
-#### 1. Quick Translate
-Automatic translation between Portuguese ↔ English (or other language).
+### Commands
+
+#### 1. Translate
+Translate text using AI (default target: Portuguese).
 ```bash
-quick translate "text" [-l <language>] [-d]
+quick --translate "text"
 ```
 
-#### 2. Quick Extract
-Extract text from documents (PDF, DOC, DOCX, PPTX, TXT).
+#### 2. Commit
+AI-powered git commit message generation with interactive flow.
 ```bash
-quick extract <file> [-o <output-file>] [--keep-format]
-```
-
-#### 3. Quick Search
-Search definitions, synonyms, examples and information.
-```bash
-quick search "term" [-w] [-s] [-e] [-t]
+quick --commit generate
 ```
 
 ### Features
-- Fast responses (<3s)
-- Offline cache for common translations/definitions
-- Compatible with Windows, macOS, Linux
+- Fast AI-powered responses
 - Colored and organized output
+- Compatible with Windows, macOS, Linux
 - Informative error messages
 
 ### Examples
-- `quick translate "apple"`
-- `quick extract document.pdf -o content.txt`
-- `quick search "run" -e -s`
+- `quick --translate "hello world"`
+- `quick --commit generate`
