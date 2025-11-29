@@ -4,7 +4,7 @@ import sys
 import time
 from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version
-from typing import Union
+from typing import Literal, Union
 
 import requests
 from packaging.version import Version
@@ -20,8 +20,6 @@ CACHE_FILE = get_config_dir() / "update-cache.json"
 UV_TOOL_PATH_PART = "uv"
 UV_TOOL_NAME = "quick-assistant"
 
-
-# Error Types
 class NetworkError(BaseFrozen):
     url: str
     message: str
@@ -47,6 +45,7 @@ class CacheError(BaseFrozen):
 
 
 UpdateError = Union[NetworkError, VersionCheckError, PackageNotInstalled, SubprocessError, CacheError]
+UpdateMethod = Literal["uv", "pipx", "pip"]
 
 
 def format_update_error(error: UpdateError) -> str:
@@ -105,58 +104,80 @@ def save_check_timestamp() -> None:
     CACHE_FILE.write_text(json.dumps({"last_check": time.time()}))
 
 
-def update_package() -> Result[SubprocessError, None]:
-    """Attempt to update via uv tool (if installed that way), then pipx, then pip.
+def run_command(cmd: list[str]) -> Result[SubprocessError, subprocess.CompletedProcess[str]]:
+    try:
+        completed = subprocess.run(cmd, capture_output=True, text=True)
+        return Result.ok(completed)
+    except FileNotFoundError as e:
+        return Result.err(SubprocessError(command=" ".join(cmd), exit_code=127, stderr=str(e)))
 
-    Handles missing executables (e.g., uv or pipx not in PATH) gracefully.
-    Runs synchronously and surfaces errors (including Windows file-lock issues) directly.
-    """
 
-    def run_command(cmd: list[str]) -> Result[SubprocessError, subprocess.CompletedProcess[str]]:
-        try:
-            completed = subprocess.run(cmd, capture_output=True, text=True)
-            return Result.ok(completed)
-        except FileNotFoundError as e:
-            return Result.err(SubprocessError(command=" ".join(cmd), exit_code=127, stderr=str(e)))
+def is_uv_tool_install() -> bool:
+    exe_path = Path(sys.executable).resolve()
+    parts = [p.lower() for p in exe_path.parts]
+    return UV_TOOL_PATH_PART in parts and "tools" in parts and UV_TOOL_NAME in parts
 
-    def is_uv_tool_install() -> bool:
-        exe_path = Path(sys.executable).resolve()
-        parts = [p.lower() for p in exe_path.parts]
-        return UV_TOOL_PATH_PART in parts and "tools" in parts and UV_TOOL_NAME in parts
 
-    uv_cmd = ["uv", "tool", "install", PACKAGE_NAME, "--force"]
-    pipx_cmd = ["pipx", "upgrade", PACKAGE_NAME]
-    pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
+def try_uv_update() -> Result[SubprocessError, None]:
+    cmd = ["uv", "tool", "install", PACKAGE_NAME, "--force"]
+    result = run_command(cmd)
 
-    if is_uv_tool_install():
-        uv_result = run_command(uv_cmd)
-        match uv_result.inner:
-            case Ok(value=cp) if cp.returncode == 0:
-                return Result.ok(None)
-            case _:
-                # Ignore uv failures and try other managers
-                pass
-
-    pipx_result = run_command(pipx_cmd)
-    match pipx_result.inner:
-        case Ok(value=cp) if cp.returncode == 0:
-            return Result.ok(None)
-        case _:
-            # Ignore pipx failures (missing or error) and try pip next
-            pass
-
-    pip_result = run_command(pip_cmd)
-    match pip_result.inner:
+    match result.inner:
         case Ok(value=cp) if cp.returncode == 0:
             return Result.ok(None)
         case Ok(value=cp):
             stderr = cp.stderr or cp.stdout or "Unknown error"
-            return Result.err(SubprocessError(command=" ".join(pip_cmd), exit_code=cp.returncode, stderr=stderr))
+            return Result.err(SubprocessError(command=" ".join(cmd), exit_code=cp.returncode, stderr=stderr))
         case Err(error=err):
             return Result.err(err)
 
 
+def try_pipx_update() -> Result[SubprocessError, None]:
+    cmd = ["pipx", "upgrade", PACKAGE_NAME]
+    result = run_command(cmd)
+
+    match result.inner:
+        case Ok(value=cp) if cp.returncode == 0:
+            return Result.ok(None)
+        case Ok(value=cp):
+            stderr = cp.stderr or cp.stdout or "Unknown error"
+            return Result.err(SubprocessError(command=" ".join(cmd), exit_code=cp.returncode, stderr=stderr))
+        case Err(error=err):
+            return Result.err(err)
+
+
+def try_pip_update() -> Result[SubprocessError, None]:
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
+    result = run_command(cmd)
+
+    match result.inner:
+        case Ok(value=cp) if cp.returncode == 0:
+            return Result.ok(None)
+        case Ok(value=cp):
+            stderr = cp.stderr or cp.stdout or "Unknown error"
+            return Result.err(SubprocessError(command=" ".join(cmd), exit_code=cp.returncode, stderr=stderr))
+        case Err(error=err):
+            return Result.err(err)
+
+
+def update_package() -> Result[SubprocessError, UpdateMethod]:
+    """Attempt to update via uv tool (if installed that way), then pipx, then pip.
+
+    Handles missing executables (e.g., uv or pipx not in PATH) gracefully.
+    Returns the method used on success.
+    """
+    if is_uv_tool_install() and try_uv_update().is_ok:
+        return Result.ok("uv")
+
+    if try_pipx_update().is_ok:
+        return Result.ok("pipx")
+
+    pip_result = try_pip_update()
+    return pip_result.map(lambda _: "pip")
+
+
 def check_and_update() -> None:
+    """Auto-update check on startup. Silently ignores errors to avoid interrupting user."""
     if not should_check_update():
         return
 
@@ -188,6 +209,7 @@ def check_and_update() -> None:
 
 
 def execute_update() -> int:
+    """Manual update command. Returns exit code."""
     current_result = get_current_version()
     match current_result.inner:
         case Err(error=current_err):
@@ -211,8 +233,8 @@ def execute_update() -> int:
     print(f"Updating quick-assistant {current} → {latest}...")
     update_result = update_package()
     match update_result.inner:
-        case Ok():
-            print("Update complete!")
+        case Ok(value=method):
+            print(f"Update complete! (via {method})")
             return 0
         case Err(error=update_err):
             print(f"Update failed: {format_update_error(update_err)}")
