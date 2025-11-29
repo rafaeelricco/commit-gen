@@ -240,7 +240,7 @@ def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
             line for line in output.strip().split("\n")
             if not line.startswith("[")
         )
-        return Result.ok(stats_only)
+        return Result.ok("\n" + stats_only)
     finally:
         try:
             os.unlink(tmp_path)
