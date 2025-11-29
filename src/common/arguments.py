@@ -117,12 +117,7 @@ class QuickCLIConfig:
     """
 
     description = "Quick Assistant - CLI tool for productivity"
-    epilog = (
-        "Examples:\n"
-        '    quick --translate "hello world"\n'
-        '    quick --translate "bonjour monde"\n'
-        "    quick --commit generate"
-    )
+    epilog = "Examples:\n    quick --commit generate"
 
     @classmethod
     def get_config(cls) -> Dict[str, Any]:

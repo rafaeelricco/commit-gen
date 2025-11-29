@@ -25,13 +25,7 @@ Get your API key at: https://aistudio.google.com/apikey
 
 ### Commands
 
-#### 1. Translate
-Translate text using AI (default target: Portuguese).
-```bash
-quick --translate "text"
-```
-
-#### 2. Commit
+#### Commit
 AI-powered git commit message generation with interactive flow.
 ```bash
 quick --commit generate
@@ -44,7 +38,6 @@ quick --commit generate
 - Informative error messages
 
 ### Examples
-- `quick --translate "hello world"`
 - `quick --commit generate`
 
 ### Uninstall
