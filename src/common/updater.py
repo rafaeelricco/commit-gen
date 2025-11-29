@@ -2,16 +2,20 @@ import json
 import subprocess
 import sys
 import time
+import requests
+
 from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version
 from typing import Literal, Union
 
-import requests
 from packaging.version import Version
+
+from rich.console import Console
 
 from common.base import BaseFrozen
 from common.config import get_config_dir
-from common.result import Err, Ok, Result
+from common.result import Err, Ok, Result, try_catch
+
 
 PACKAGE_NAME = "quick-assistant"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
@@ -20,29 +24,25 @@ CACHE_FILE = get_config_dir() / "update-cache.json"
 UV_TOOL_PATH_PART = "uv"
 UV_TOOL_NAME = "quick-assistant"
 
+
 class NetworkError(BaseFrozen):
     url: str
     message: str
 
-
 class VersionCheckError(BaseFrozen):
     message: str
 
-
 class PackageNotInstalled(BaseFrozen):
     package: str
-
 
 class SubprocessError(BaseFrozen):
     command: str
     exit_code: int
     stderr: str
 
-
 class CacheError(BaseFrozen):
     path: str
     message: str
-
 
 UpdateError = Union[NetworkError, VersionCheckError, PackageNotInstalled, SubprocessError, CacheError]
 UpdateMethod = Literal["uv", "pipx", "pip"]
@@ -85,23 +85,40 @@ def get_latest_version() -> Result[Union[NetworkError, VersionCheckError], str]:
         return Result.err(VersionCheckError(message=f"Invalid PyPI response: {e}"))
 
 
-def should_check_update() -> bool:
-    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+def should_check_update() -> Result[CacheError, bool]:
+    mkdir_result = try_catch(lambda: CACHE_FILE.parent.mkdir(parents=True, exist_ok=True))
+    match mkdir_result.inner:
+        case Err(error=e):
+            return Result.err(CacheError(path=str(CACHE_FILE.parent), message=str(e)))
+        case Ok():
+            pass
 
     if not CACHE_FILE.exists():
-        return True
+        return Result.ok(True)
 
-    try:
-        data = json.loads(CACHE_FILE.read_text())
-        last_check = data.get("last_check", 0)
-        return time.time() - last_check > CHECK_INTERVAL
-    except Exception:
-        return True
+    read_result = try_catch(lambda: json.loads(CACHE_FILE.read_text()))
+    match read_result.inner:
+        case Err():
+            return Result.ok(True)  # Cache corrupted, check anyway
+        case Ok(value=data):
+            last_check = data.get("last_check", 0)
+            return Result.ok(time.time() - last_check > CHECK_INTERVAL)
 
 
-def save_check_timestamp() -> None:
-    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CACHE_FILE.write_text(json.dumps({"last_check": time.time()}))
+def save_check_timestamp() -> Result[CacheError, None]:
+    mkdir_result = try_catch(lambda: CACHE_FILE.parent.mkdir(parents=True, exist_ok=True))
+    match mkdir_result.inner:
+        case Err(error=e):
+            return Result.err(CacheError(path=str(CACHE_FILE.parent), message=str(e)))
+        case Ok():
+            pass
+
+    write_result = try_catch(lambda: CACHE_FILE.write_text(json.dumps({"last_check": time.time()})))
+    match write_result.inner:
+        case Err(error=e):
+            return Result.err(CacheError(path=str(CACHE_FILE), message=str(e)))
+        case Ok():
+            return Result.ok(None)
 
 
 def run_command(cmd: list[str]) -> Result[SubprocessError, subprocess.CompletedProcess[str]]:
@@ -178,10 +195,17 @@ def update_package() -> Result[SubprocessError, UpdateMethod]:
 
 def check_and_update() -> None:
     """Auto-update check on startup. Silently ignores errors to avoid interrupting user."""
-    if not should_check_update():
-        return
+    console = Console()
 
-    save_check_timestamp()
+    should_check_result = should_check_update()
+    match should_check_result.inner:
+        case Err():
+            return
+        case Ok(value=should_check):
+            if not should_check:
+                return
+
+    save_check_timestamp()  # Ignore errors for silent operation
 
     current_result = get_current_version()
     match current_result.inner:
@@ -198,22 +222,24 @@ def check_and_update() -> None:
             pass
 
     if Version(latest) > Version(current):
-        print(f"Updating quick-assistant {current} → {latest}...")
+        console.print(f"Updating quick-assistant {current} → {latest}...")
         update_result = update_package()
         match update_result.inner:
             case Ok():
-                print("Update complete. Please restart the command.")
+                console.print("Update complete. Please restart the command.")
                 sys.exit(0)
             case Err(error=error):
-                print(f"Auto-update failed: {format_update_error(error)}")
+                console.print(f"Auto-update failed: {format_update_error(error)}")
 
 
 def execute_update() -> int:
     """Manual update command. Returns exit code."""
+    console = Console()
+
     current_result = get_current_version()
     match current_result.inner:
         case Err(error=current_err):
-            print(f"Error: {format_update_error(current_err)}")
+            console.print(f"[red]Error: {format_update_error(current_err)}[/red]")
             return 1
         case Ok(value=current):
             pass
@@ -221,21 +247,21 @@ def execute_update() -> int:
     latest_result = get_latest_version()
     match latest_result.inner:
         case Err(error=latest_err):
-            print(f"Error: {format_update_error(latest_err)}")
+            console.print(f"[red]Error: {format_update_error(latest_err)}[/red]")
             return 1
         case Ok(value=latest):
             pass
 
     if Version(latest) <= Version(current):
-        print(f"Already at latest version ({current}).")
+        console.print(f"Already at latest version ({current}).")
         return 0
 
-    print(f"Updating quick-assistant {current} → {latest}...")
+    console.print(f"Updating quick-assistant {current} → {latest}...")
     update_result = update_package()
     match update_result.inner:
         case Ok(value=method):
-            print(f"Update complete! (via {method})")
+            console.print(f"[green]Update complete![/green] (via {method})")
             return 0
         case Err(error=update_err):
-            print(f"Update failed: {format_update_error(update_err)}")
+            console.print(f"[red]Update failed: {format_update_error(update_err)}[/red]")
             return 1
