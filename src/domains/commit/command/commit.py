@@ -118,7 +118,6 @@ def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
     """Pure: checks if path is inside a git repository."""
     result = subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
-        capture_output=False,
         text=True,
         cwd=path,
     )
