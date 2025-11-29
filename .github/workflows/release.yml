@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
 
 permissions:
   contents: write
@@ -19,34 +18,45 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Validate version matches pyproject.toml
+      - name: Get current version
+        id: current
         run: |
-          TOML_VERSION=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml)
-          if [ "$TOML_VERSION" != "${{ steps.version.outputs.version }}" ]; then
-            echo "Tag version (${{ steps.version.outputs.version }}) doesn't match pyproject.toml ($TOML_VERSION)"
-            exit 1
+          VERSION=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version changed
+        id: check
+        run: |
+          git show HEAD~1:pyproject.toml > /tmp/old_pyproject.toml 2>/dev/null || echo 'version = "0.0.0"' > /tmp/old_pyproject.toml
+          OLD_VERSION=$(grep -Po '(?<=^version = ")[^"]*' /tmp/old_pyproject.toml || echo "0.0.0")
+          if [ "$OLD_VERSION" != "${{ steps.current.outputs.version }}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up Python
+        if: steps.check.outputs.changed == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install uv
+        if: steps.check.outputs.changed == 'true'
         uses: astral-sh/setup-uv@v4
 
       - name: Build package
+        if: steps.check.outputs.changed == 'true'
         run: uv build
 
       - name: Create GitHub Release
+        if: steps.check.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.current.outputs.version }}
           generate_release_notes: true
           files: dist/*
 
       - name: Publish to PyPI
+        if: steps.check.outputs.changed == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
