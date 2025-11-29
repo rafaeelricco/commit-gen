@@ -99,6 +99,7 @@ class CommandResponse(BaseFrozen, ToJSON):
     message: str
     commit_message: Optional[str] = None
     action: Optional[str] = None
+    git_output: Optional[str] = None
 
 
 # =============================================================================
@@ -271,23 +272,33 @@ def handle_selection(
             match commit_result.inner:
                 case Err(error=git_err):
                     return Result[CommitError, LoopResult].err(git_err)
-                case Ok():
+                case Ok(value=commit_output):
                     return Result[CommitError, LoopResult].ok(
-                        CommandResponse(message="commit", commit_message=state.message, action="commit")
+                        CommandResponse(
+                            message="commit",
+                            commit_message=state.message,
+                            action="commit",
+                            git_output=commit_output,
+                        )
                     )
         case "commit_push":
             commit_result = perform_commit(state.message, state.cwd)
             match commit_result.inner:
                 case Err(error=git_err):
                     return Result[CommitError, LoopResult].err(git_err)
-                case Ok():
+                case Ok(value=commit_output):
                     push_result = perform_push(state.cwd)
                     match push_result.inner:
                         case Err(error=push_err):
                             return Result[CommitError, LoopResult].err(push_err)
-                        case Ok():
+                        case Ok(value=push_output):
                             return Result[CommitError, LoopResult].ok(
-                                CommandResponse(message="commit_push", commit_message=state.message, action="commit_push")
+                                CommandResponse(
+                                    message="commit_push",
+                                    commit_message=state.message,
+                                    action="commit_push",
+                                    git_output=f"{commit_output}{push_output}",
+                                )
                             )
         case "regenerate":
             return Result.ok(RegenerateSignal(state))
@@ -446,13 +457,9 @@ class Handler(BaseCommandHandler[Command]):
 
         match result.inner:
             case Ok(value=response):
-                # Determine status based on response message
                 status = 200 if response.message in ("commit", "commit_push", "cancelled") else 400
-                if response.message == "commit_failed":
-                    status = 400
-                elif response.message == "push_failed":
-                    status = 400
-                console.print((response.commit_message or "") if response.message not in ("cancelled",) else "")
+                if response.git_output:
+                    console.print(response.git_output)
                 return json_response(response, status)
             case Err(error=e):
                 return error_to_response(e)
