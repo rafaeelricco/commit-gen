@@ -1,4 +1,5 @@
 import json
+import platform
 import subprocess
 import sys
 import time
@@ -19,6 +20,7 @@ CHECK_INTERVAL = 3600 * 24
 CACHE_FILE = get_config_dir() / "update-cache.json"
 UV_TOOL_PATH_PART = "uv"
 UV_TOOL_NAME = "quick-assistant"
+WINDOWS_DELAY_SECONDS = 2
 
 
 # Error Types
@@ -109,6 +111,8 @@ def update_package() -> Result[SubprocessError, None]:
     """Attempt to update via uv tool (if installed that way), then pipx, then pip.
 
     Handles missing executables (e.g., uv or pipx not in PATH) gracefully.
+    On Windows, schedules the update in a detached shell with a short delay to avoid
+    file-lock errors on the running quick.exe.
     """
 
     def run_command(cmd: list[str]) -> Result[SubprocessError, subprocess.CompletedProcess[str]]:
@@ -117,6 +121,24 @@ def update_package() -> Result[SubprocessError, None]:
             return Result.ok(completed)
         except FileNotFoundError as e:
             return Result.err(SubprocessError(command=" ".join(cmd), exit_code=127, stderr=str(e)))
+
+    def run_detached_windows(
+        cmd: list[str], delay_seconds: int = WINDOWS_DELAY_SECONDS
+    ) -> Result[SubprocessError, None]:
+        """Launch a command after a short delay so the current process can exit."""
+
+        def quote(arg: str) -> str:
+            return f'"{arg}"' if " " in arg else arg
+
+        quoted_cmd = " ".join(quote(c) for c in cmd)
+        delay = f"timeout /t {delay_seconds} /nobreak >nul"
+        full_cmd = ["cmd", "/c", "start", "", "/b", "cmd", "/c", f"{delay} & {quoted_cmd}"]
+
+        try:
+            subprocess.Popen(full_cmd)
+            return Result.ok(None)
+        except Exception as e:
+            return Result.err(SubprocessError(command=" ".join(cmd), exit_code=1, stderr=str(e)))
 
     def is_uv_tool_install() -> bool:
         exe_path = Path(sys.executable).resolve()
@@ -127,32 +149,58 @@ def update_package() -> Result[SubprocessError, None]:
     pipx_cmd = ["pipx", "upgrade", PACKAGE_NAME]
     pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
 
-    if is_uv_tool_install():
-        uv_result = run_command(uv_cmd)
-        match uv_result.inner:
+    is_windows = platform.system() == "Windows"
+
+    if is_windows:
+        if is_uv_tool_install():
+            uv_detached = run_detached_windows(uv_cmd)
+            match uv_detached.inner:
+                case Ok():
+                    return Result.ok(None)
+                case Err():
+                    pass
+
+        pipx_detached = run_detached_windows(pipx_cmd)
+        match pipx_detached.inner:
+            case Ok():
+                return Result.ok(None)
+            case Err():
+                pass
+
+        pip_detached = run_detached_windows(pip_cmd)
+        match pip_detached.inner:
+            case Ok():
+                return Result.ok(None)
+            case Err(error=err):
+                return Result.err(err)
+
+    else:
+        if is_uv_tool_install():
+            uv_result = run_command(uv_cmd)
+            match uv_result.inner:
+                case Ok(value=cp) if cp.returncode == 0:
+                    return Result.ok(None)
+                case _:
+                    # Ignore uv failures and try other managers
+                    pass
+
+        pipx_result = run_command(pipx_cmd)
+        match pipx_result.inner:
             case Ok(value=cp) if cp.returncode == 0:
                 return Result.ok(None)
             case _:
-                # Ignore uv failures and try other managers
+                # Ignore pipx failures (missing or error) and try pip next
                 pass
 
-    pipx_result = run_command(pipx_cmd)
-    match pipx_result.inner:
-        case Ok(value=cp) if cp.returncode == 0:
-            return Result.ok(None)
-        case _:
-            # Ignore pipx failures (missing or error) and try pip next
-            pass
-
-    pip_result = run_command(pip_cmd)
-    match pip_result.inner:
-        case Ok(value=cp) if cp.returncode == 0:
-            return Result.ok(None)
-        case Ok(value=cp):
-            stderr = cp.stderr or cp.stdout or "Unknown error"
-            return Result.err(SubprocessError(command=" ".join(pip_cmd), exit_code=cp.returncode, stderr=stderr))
-        case Err(error=err):
-            return Result.err(err)
+        pip_result = run_command(pip_cmd)
+        match pip_result.inner:
+            case Ok(value=cp) if cp.returncode == 0:
+                return Result.ok(None)
+            case Ok(value=cp):
+                stderr = cp.stderr or cp.stdout or "Unknown error"
+                return Result.err(SubprocessError(command=" ".join(pip_cmd), exit_code=cp.returncode, stderr=stderr))
+            case Err(error=err):
+                return Result.err(err)
 
 
 def check_and_update() -> None:
@@ -180,7 +228,10 @@ def check_and_update() -> None:
         update_result = update_package()
         match update_result.inner:
             case Ok():
-                print("Update complete. Please restart the command.")
+                if platform.system() == "Windows":
+                    print("Update started in the background. Please re-run the command in a few seconds.")
+                else:
+                    print("Update complete. Please restart the command.")
                 sys.exit(0)
             case Err(error=error):
                 print(f"Auto-update failed: {format_update_error(error)}")
@@ -211,7 +262,10 @@ def execute_update() -> int:
     update_result = update_package()
     match update_result.inner:
         case Ok():
-            print("Update complete!")
+            if platform.system() == "Windows":
+                print("Update started in the background. Please re-run the command in a few seconds.")
+            else:
+                print("Update complete!")
             return 0
         case Err(error=update_err):
             print(f"Update failed: {format_update_error(update_err)}")
