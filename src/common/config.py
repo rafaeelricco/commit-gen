@@ -1,0 +1,121 @@
+import json
+import os
+
+from enum import Enum
+from pathlib import Path
+from typing import Optional, Union
+
+from common.base import BaseFrozen
+from common.result import Result, Ok, Err, try_catch
+
+
+class CommitConvention(str, Enum):
+    CONVENTIONAL = "conventional"
+    IMPERATIVE = "imperative"
+    CUSTOM = "custom"
+
+
+class Config(BaseFrozen):
+    api_key: str
+    commit_convention: CommitConvention
+    custom_template: Optional[str] = None
+
+
+class ConfigNotFound(BaseFrozen):
+    path: str
+
+
+class ConfigParseError(BaseFrozen):
+    message: str
+
+
+class ConfigWriteError(BaseFrozen):
+    message: str
+
+
+ConfigError = Union[ConfigNotFound, ConfigParseError, ConfigWriteError]
+
+
+def get_config_path() -> Path:
+    home = Path.home()
+    return home / ".quick-assistant" / "config.json"
+
+
+def load_config() -> Result[ConfigError, Config]:
+    config_path = get_config_path()
+
+    if not config_path.exists():
+        return Result.err(ConfigNotFound(path=str(config_path)))
+
+    read_result = try_catch(lambda: config_path.read_text())
+    match read_result.inner:
+        case Err(error=e):
+            return Result.err(ConfigParseError(message=str(e)))
+        case Ok(value=content):
+            pass
+
+    parse_result = try_catch(lambda: json.loads(content))
+    match parse_result.inner:
+        case Err(error=e):
+            return Result.err(ConfigParseError(message=str(e)))
+        case Ok(value=data):
+            pass
+
+    validate_result = try_catch(lambda: Config(**data))
+    match validate_result.inner:
+        case Err(error=e):
+            return Result.err(ConfigParseError(message=str(e)))
+        case Ok(value=config):
+            return Result.ok(config)
+
+
+def save_config(config: Config) -> Result[ConfigWriteError, None]:
+    config_path = get_config_path()
+
+    mkdir_result = try_catch(lambda: config_path.parent.mkdir(parents=True, exist_ok=True))
+    match mkdir_result.inner:
+        case Err(error=e):
+            return Result.err(ConfigWriteError(message=str(e)))
+        case Ok():
+            pass
+
+    data = {
+        "api_key": config.api_key,
+        "commit_convention": config.commit_convention.value,
+        "custom_template": config.custom_template,
+    }
+
+    write_result = try_catch(lambda: config_path.write_text(json.dumps(data, indent=2)))
+    match write_result.inner:
+        case Err(error=e):
+            return Result.err(ConfigWriteError(message=str(e)))
+        case Ok():
+            return Result.ok(None)
+
+
+def is_configured() -> bool:
+    return get_config_path().exists()
+
+
+def is_ready() -> bool:
+    env_key = os.getenv("GOOGLE_API_KEY")
+    if env_key:
+        return True
+    return get_config_path().exists()
+
+
+def get_api_key() -> Result[ConfigNotFound, str]:
+    env_key = os.getenv("GOOGLE_API_KEY")
+    if env_key:
+        return Result.ok(env_key)
+
+    config_result = load_config()
+    match config_result.inner:
+        case Ok(value=config):
+            return Result.ok(config.api_key)
+        case Err(error=e):
+            match e:
+                case ConfigNotFound():
+                    return Result.err(e)
+                case _:
+                    return Result.err(ConfigNotFound(path=str(get_config_path())))

@@ -9,6 +9,7 @@ from common.base import BaseFrozen, BaseFrozenArbitrary, BaseSerializable
 from common.command.base_command import BaseCommand
 from common.command.base_command_handler import BaseCommandHandler
 from common.command.execute_command_handler import json_response, execute_command_handler
+from common.config import CommitConvention, load_config, get_api_key
 from common.loading import spinner
 from common.prompts import prompt_commit_message, select_option, text_input
 from common.result import Result, Ok, Err, async_try_catch
@@ -51,6 +52,8 @@ class CommitState(BaseFrozen):
     cwd: str
     diff: str
     message: str
+    convention: CommitConvention = CommitConvention.IMPERATIVE
+    custom_template: Optional[str] = None
 
     def with_message(self, new_message: str) -> "CommitState":
         return self.model_copy(update={"message": new_message})
@@ -79,10 +82,12 @@ class CommandResponse(BaseSerializable):
 
 
 def validate_api_key() -> Result[MissingApiKey, str]:
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        return Result.err(MissingApiKey())
-    return Result.ok(api_key)
+    result = get_api_key()
+    match result.inner:
+        case Ok(value=key):
+            return Result.ok(key)
+        case Err():
+            return Result.err(MissingApiKey())
 
 
 def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
@@ -110,8 +115,13 @@ def validate_action(action: str) -> Result[UnsupportedAction, Action]:
     return Result.ok("generate")
 
 
-async def generate_message(api_key: str, diff: str) -> Result[Union[Exception, EmptyAIResponse], str]:
-    result = await async_try_catch(lambda: _generate_message_impl(api_key, diff))
+async def generate_message(
+    api_key: str,
+    diff: str,
+    convention: CommitConvention = CommitConvention.IMPERATIVE,
+    custom_template: Optional[str] = None,
+) -> Result[Union[Exception, EmptyAIResponse], str]:
+    result = await async_try_catch(lambda: _generate_message_impl(api_key, diff, convention, custom_template))
     match result.inner:
         case Ok(value=msg):
             if not msg.strip():
@@ -121,13 +131,16 @@ async def generate_message(api_key: str, diff: str) -> Result[Union[Exception, E
             return Result.err(e)
 
 
-async def _generate_message_impl(api_key: str, diff: str) -> str:
+async def _generate_message_impl(
+    api_key: str, diff: str, convention: CommitConvention, custom_template: Optional[str]
+) -> str:
     with spinner("Generating…", spinner_style="dots"):
         response = await genai.Client(api_key=api_key).aio.models.generate_content(
             model="models/gemini-flash-latest",
             contents=diff,
             config=types.GenerateContentConfig(
-                system_instruction=prompt_commit_message(diff), response_mime_type="text/plain"
+                system_instruction=prompt_commit_message(diff, convention, custom_template),
+                response_mime_type="text/plain",
             ),
         )
     return _extract_text(response)
@@ -262,7 +275,7 @@ async def interaction_loop(state: CommitState, console: Console) -> Result[Commi
         case Ok(value=loop_result):
             match loop_result:
                 case RegenerateSignal(state=s):
-                    gen_result = await generate_message(s.api_key, s.diff)
+                    gen_result = await generate_message(s.api_key, s.diff, s.convention, s.custom_template)
                     match gen_result.inner:
                         case Ok(value=new_msg):
                             return await interaction_loop(s.with_message(new_msg), console)
@@ -301,6 +314,16 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok(value=api_key):
             pass
 
+    convention = CommitConvention.IMPERATIVE
+    custom_template: Optional[str] = None
+    config_result = load_config()
+    match config_result.inner:
+        case Ok(value=config):
+            convention = config.commit_convention
+            custom_template = config.custom_template
+        case Err():
+            pass
+
     cwd = os.getcwd()
     repo_result = validate_git_repo(cwd)
     match repo_result.inner:
@@ -316,7 +339,7 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok(value=diff):
             pass
 
-    gen_result = await generate_message(api_key, diff)
+    gen_result = await generate_message(api_key, diff, convention, custom_template)
     match gen_result.inner:
         case Err(error=gen_err):
             match gen_err:
@@ -327,14 +350,16 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok(value=message):
             pass
 
-    initial_state = CommitState(api_key=api_key, cwd=cwd, diff=diff, message=message)
+    initial_state = CommitState(
+        api_key=api_key, cwd=cwd, diff=diff, message=message, convention=convention, custom_template=custom_template
+    )
     return await interaction_loop(initial_state, console)
 
 
 def error_to_response(error: CommitError) -> tuple[Dict[str, Any], int]:
     match error:
         case MissingApiKey():
-            msg = "GOOGLE_API_KEY not found in environment. Set it in .env file"
+            msg = "API key not configured. Run 'quick setup' to configure."
         case NotGitRepo():
             msg = "Not a git repository. Initialize with 'git init' or navigate to a git project."
         case GitError(message=m):

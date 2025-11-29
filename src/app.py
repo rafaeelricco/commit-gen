@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 from typing import List, Optional
 
 from common.arguments import CommandType, ParsedArgs, create_parser
+from common.config import is_ready
 from common.updater import execute_update
 from domains.commit.command.commit import execute_commit
+from domains.setup.command.setup import execute_setup
 
 
 class QuickAssistant:
@@ -20,12 +22,18 @@ class QuickAssistant:
         try:
             namespace = self.parser.parse_args(args)
             parsed_args = ParsedArgs(command=getattr(namespace, "command", None))
+            command_type = parsed_args.get_command_type()
 
-            match parsed_args.get_command_type():
+            if not is_ready() and command_type not in (CommandType.SETUP, CommandType.HELP):
+                return asyncio.run(execute_setup())
+
+            match command_type:
                 case CommandType.COMMIT:
                     return asyncio.run(execute_commit("generate"))
                 case CommandType.UPDATE:
                     return execute_update()
+                case CommandType.SETUP:
+                    return asyncio.run(execute_setup())
                 case CommandType.HELP:
                     self.parser.print_help()
                     return 1

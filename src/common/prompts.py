@@ -1,8 +1,100 @@
 import questionary
 from prompt_toolkit.styles import Style
+from typing import Optional
+
+from common.config import CommitConvention
 
 
-def prompt_commit_message(git_diff: str) -> str:
+def prompt_commit_message(
+    git_diff: str, convention: CommitConvention = CommitConvention.IMPERATIVE, custom_template: Optional[str] = None
+) -> str:
+    match convention:
+        case CommitConvention.CONVENTIONAL:
+            return prompt_conventional(git_diff)
+        case CommitConvention.IMPERATIVE:
+            return prompt_imperative(git_diff)
+        case CommitConvention.CUSTOM:
+            return prompt_custom(git_diff, custom_template)
+
+
+def prompt_conventional(git_diff: str) -> str:
+    return f"""
+      <system>
+        You are an expert software engineer and version control specialist.
+        Your job is to read git diffs and output high-quality commit messages
+        that follow Conventional Commits specification.
+      </system>
+
+      <rules>
+        1. Analyze only the provided diff. Do not guess about unrelated changes.
+        2. Classify the change size:
+          - SMALL: changes in 1 file, and total changes are minor
+                    (e.g. a few lines, small refactor, typo, log tweak, single function change).
+          - MEDIUM: multiple files OR a substantial change in 1 file.
+          - LARGE: many files and/or broad impact (new features, big refactors, major deletions).
+        3. Commit message style (Conventional Commits):
+          - Use present-tense, imperative after the type prefix.
+          - Prefix with type: feat, fix, refactor, chore, docs, style, test, perf, ci, build
+          - Format: type(optional-scope): description
+          - Examples: "feat: add user authentication", "fix(api): handle null response"
+          - Avoid noise words like "small change" or "minor update".
+          - No ticket IDs, no author names, no "WIP".
+        4. Output format:
+          - For SMALL changes:
+            - Output ONLY a single-line summary with type prefix (no body).
+          - For MEDIUM or LARGE changes:
+            - Line 1: single-line summary with type prefix (title).
+            - Line 2: blank line.
+            - From line 3 onwards: one or more bullet points,
+              each line starting with "- " (dash + space).
+        5. Formatting rules for the body (MEDIUM/LARGE only):
+          - You MAY use inline code formatting with single backticks, e.g. `function_name`, `git diff`.
+          - Do NOT use multiline code fences (no ``` blocks).
+          - Keep language concise and concrete. Prefer what the change DOES over HOW it is implemented.
+      </rules>
+
+      <examples>
+        <example>
+          <git_diff>
+            // Single file, few lines
+            diff --git a/src/logger.ts b/src/logger.ts
+            index 1234567..89abcde 100644
+            --- a/src/logger.ts
+            +++ b/src/logger.ts
+            @@ -10,7 +10,7 @@ export function logInfo(message: string) {{
+            -  console.log('[INFO]', message);
+            +  console.log('[INFO]', new Date().toISOString(), message);
+            }}
+          </git_diff>
+          <classification>SMALL</classification>
+          <commit_message>
+            feat(logger): add timestamp to info logs
+          </commit_message>
+        </example>
+      </examples>
+
+      <input>
+        <git_diff>
+          {git_diff}
+        </git_diff>
+      </input>
+
+      <output_instructions>
+        1. First, internally decide if the change is SMALL, MEDIUM, or LARGE.
+        2. Then output ONLY the final commit message text, with no explanation.
+        3. Do NOT wrap the commit message in quotes or code fences.
+        4. Always start with a Conventional Commits type prefix.
+        5. Respect the required format based on size:
+          - SMALL: single line only.
+          - MEDIUM/LARGE:
+            • Line 1: title line with type prefix.
+            • Line 2: blank.
+            • Remaining lines: each line is a bullet starting with "- ".
+      </output_instructions>
+"""
+
+
+def prompt_imperative(git_diff: str) -> str:
     return f"""
       <system>
         You are an expert software engineer and version control specialist.
@@ -117,6 +209,32 @@ def prompt_commit_message(git_diff: str) -> str:
 """
 
 
+def prompt_custom(git_diff: str, template: Optional[str]) -> str:
+    if not template:
+        return prompt_imperative(git_diff)
+
+    processed_template = template.replace("{diff}", git_diff)
+
+    return f"""
+      <system>
+        You are an expert software engineer and version control specialist.
+        Your job is to read git diffs and output high-quality commit messages
+        following the user's custom template.
+      </system>
+
+      <user_template>
+        {processed_template}
+      </user_template>
+
+      <output_instructions>
+        1. Follow the user's template style and format.
+        2. Analyze the content and create a commit message that matches the template pattern.
+        3. Output ONLY the final commit message text, with no explanation.
+        4. Do NOT wrap the commit message in quotes or code fences.
+      </output_instructions>
+"""
+
+
 PROMPT_STYLE = Style(
     [
         ("question", "bold"),
@@ -146,6 +264,14 @@ async def select_option(prompt: str, options: list[tuple[str, str]]) -> str | No
 async def text_input(prompt: str) -> str | None:
     try:
         result = await questionary.text(prompt, style=PROMPT_STYLE).ask_async()
+        return result.strip() if result else None
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
+async def password_input(prompt: str) -> str | None:
+    try:
+        result = await questionary.password(prompt, style=PROMPT_STYLE).ask_async()
         return result.strip() if result else None
     except (KeyboardInterrupt, EOFError):
         return None
