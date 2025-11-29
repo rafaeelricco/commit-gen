@@ -14,7 +14,14 @@ pip install quick-assistant
 
 ### Requirements
 
-- `GOOGLE_API_KEY` environment variable (Google Gemini API)
+Set your Google Gemini API key:
+
+```bash
+# Add to your shell profile (~/.zshrc or ~/.bashrc)
+export GOOGLE_API_KEY="your-api-key"
+```
+
+Get your API key at: https://aistudio.google.com/apikey
 
 ### Commands
 
