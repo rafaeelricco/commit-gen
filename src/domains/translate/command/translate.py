@@ -42,9 +42,7 @@ class Handler(BaseCommandHandler[Command]):
 
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            raise BadRequest(
-                message="GOOGLE_API_KEY not found in environment. Set it in .env file"
-            )
+            raise BadRequest(message="GOOGLE_API_KEY not found in environment. Set it in .env file")
 
         translation_prompt = prompt_translate(command.content, command.target_language)
 
@@ -86,9 +84,7 @@ async def execute_translate(content: Optional[str]) -> int:
 
         request_data = {"content": content, "target_language": "pt"}
 
-        response, status_code = await execute_command_handler(
-            Command, request_data, Handler
-        )
+        response, status_code = await execute_command_handler(Command, request_data, Handler)
 
         return 0 if status_code == 200 else 1
 
