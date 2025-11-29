@@ -14,24 +14,29 @@ pip install quick-assistant
 
 ### Windows Users
 
-If `quick` command is not recognized after installation:
+After `pipx install quick-assistant`, if `quick` is not recognized:
 
-**Option 1: Using pipx (recommended)**
+**Step 1: Add pipx bin to PATH**
 ```powershell
 pipx ensurepath
-# Restart your terminal
 ```
 
-**Option 2: Using pip**
-```powershell
-# Add Python Scripts to PATH (adjust Python version as needed)
-setx PATH "%PATH%;%USERPROFILE%\AppData\Local\Programs\Python\Python312\Scripts"
-# Restart your terminal
-```
+**Step 2: Restart your terminal completely**
 
-**Verify installation:**
+Close and reopen PowerShell/CMD. A new tab is NOT enough - close the entire window.
+
+**Step 3: Verify**
 ```powershell
 quick doctor
+```
+
+**Alternative: Run directly without PATH**
+
+If you can't restart or modify PATH, use the full path:
+```powershell
+# pipx installation location
+%USERPROFILE%\.local\bin\quick.exe doctor
+%USERPROFILE%\.local\bin\quick.exe commit
 ```
 
 ### Requirements
