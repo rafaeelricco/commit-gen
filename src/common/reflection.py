@@ -8,9 +8,6 @@ T = TypeVar("T")
 
 
 def leaf_classes(superclass: Type[T]) -> List[Type[T]]:
-    """
-    Find all final subclasses of a class.
-    """
     leaf_classes = []
 
     def is_generic_leaf(parent: type, cls: type) -> bool:
@@ -32,10 +29,6 @@ def leaf_classes(superclass: Type[T]) -> List[Type[T]]:
 
 
 def import_all(prefix: str) -> None:
-    """
-    Import all modules that start with a prefix.
-    If no prefix is given, all project files will be imported.
-    """
     files = [str(file) for file in Path.cwd().rglob("*.py") if file.is_file()]
 
     modules = [
@@ -53,7 +46,6 @@ TypeArgument = Union[Type, Any]
 
 
 def get_type_constructor(ty: Type[Any]) -> Type[Any]:
-    """Returns the type with no type-arguments applied."""
     if hasattr(ty, "__pydantic_generic_metadata__"):
         return ty.__pydantic_generic_metadata__["origin"] or ty
     return typing.get_origin(ty) or ty
@@ -68,9 +60,6 @@ def get_type_parameters(ty: Type) -> List[TypeVar]:
 
 
 def get_type_arguments(ty: Type) -> List[TypeArgument]:
-    # We use get_origin and get_args from pydantic because
-    # generic arguments in instances or BaseModel don't get
-    # work with typing.get_args and typing.get_origin
     if hasattr(ty, "__pydantic_generic_metadata__"):
         return list(ty.__pydantic_generic_metadata__["args"])
     return list(typing.get_args(ty))

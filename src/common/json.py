@@ -1,13 +1,3 @@
-#
-# Classes for JSON serialisation and parsing.
-#
-# Use the module-level parse_json and to_json functions for parsing and serialisation
-#
-# Inherit from ToJSON to enable serialisation
-# Inherit from FromJSON to enable parsing
-#
-# Customise any of the two by implementing the class methods to_json and from_json.
-#
 from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 from typing import (
@@ -36,13 +26,7 @@ T = TypeVar("T")
 
 
 class ParsingOptions(BaseModel):
-    model_config = ConfigDict(
-        strict=True,  # no type coercion
-        frozen=True,  # make immutable
-        arbitrary_types_allowed=False,  # properties that don't inherit from BaseModel
-        extra="forbid",  # disallow extra fields
-    )
-    # If an optional field is missing in the parsed JSON, should you fill it with None?
+    model_config = ConfigDict(strict=True, frozen=True, arbitrary_types_allowed=False, extra="forbid")
     fill_missing_optionals: bool
 
 
@@ -82,11 +66,9 @@ def to_json(data: Serializeable) -> JSONObject:
     raise ValueError(f"Cannot convert {type(data).__name__} to JSON")
 
 
-# A type with a direct mapping from JSON string to Python object and back.
 JSONObject = str | float | int | None | list | dict
 
 
-# Inherit from this class to make the type serializeable
 class ToJSON:
     def to_json(self: Self) -> JSONObject:
         properties: List[str] = list(get_type_hints(self.__class__).keys())
@@ -97,7 +79,6 @@ def is_optional(typ: Type[Any]) -> bool:
     return get_origin(typ) is Union and type(None) in get_args(typ)
 
 
-# Inherit from this class to create the type from a JSON object.
 class FromJSON:
     @classmethod
     def from_json(cls: Type[T], json: JSONObject, opts: ParsingOptions = defaultParsingOptions) -> Result[str, T]:
@@ -156,13 +137,10 @@ def try_concrete_type_hints(ty: Type[T]) -> Result[str, Dict[str, Type]]:
         return Result.err(", ".join(list(e.args)))
 
 
-# built-in types for which we have encoding and decoding implemented.
 BuiltInSupported = str | float | int | None | list | dict | set | Decimal
 
-# Types we can transform into a JSONObject
 Serializeable = JSONObject | ToJSON | BuiltInSupported
 
-# Types we can parse from a JSONObject
 Parseable = JSONObject | FromJSON | BuiltInSupported
 
 Parser = Callable[[JSONObject, ParsingOptions], Result[str, T]]

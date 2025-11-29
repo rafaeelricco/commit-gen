@@ -1,30 +1,18 @@
-"""
-Result type implementation for functional error handling.
-
-This module provides a Result type similar to Rust's Result enum, enabling
-functional composition and eliminating the need for try-catch blocks. It supports
-mapping, chaining, and traversal operations for robust error handling patterns.
-"""
-
 from typing import TypeVar, Generic, Callable, Union, List, Any, Awaitable
 from dataclasses import dataclass
 
-F = TypeVar("F")  # Failure type
-S = TypeVar("S")  # Success type
+F = TypeVar("F")
+S = TypeVar("S")
 T = TypeVar("T")
 
 
 @dataclass(frozen=True)
 class Err(Generic[F]):
-    """Error variant containing failure value."""
-
     error: F
 
 
 @dataclass(frozen=True)
 class Ok(Generic[S]):
-    """Success variant containing success value."""
-
     value: S
 
 
@@ -33,25 +21,17 @@ Unwrapped = Union[Err[F], Ok[S]]
 
 @dataclass(frozen=True)
 class Result(Generic[F, S]):
-    """
-    Result type representing either failure (Err) or success (Ok).
-    Eliminates the need for try-catch blocks through functional composition.
-    """
-
     inner: Unwrapped[F, S]
 
     @staticmethod
     def ok(value: S) -> "Result[F, S]":
-        """Create a successful Result containing the given value."""
         return Result(Ok(value))
 
     @staticmethod
     def err(error: F) -> "Result[F, S]":
-        """Create a failed Result containing the given error."""
         return Result(Err(error))
 
     def map(self, func: Callable[[S], T]) -> "Result[F, T]":
-        """Transform the success value if present."""
         match self.inner:
             case Ok(value=value):
                 return Result(Ok(func(value)))
@@ -59,7 +39,6 @@ class Result(Generic[F, S]):
                 return Result(Err(error))
 
     def map_err(self, func: Callable[[F], T]) -> "Result[T, S]":
-        """Transform the error value if present."""
         match self.inner:
             case Ok(value=value):
                 return Result(Ok(value))
@@ -67,7 +46,6 @@ class Result(Generic[F, S]):
                 return Result(Err(func(error)))
 
     def then(self, func: Callable[[S], "Result[F, T]"]) -> "Result[F, T]":
-        """Chain operations that return Result (flatMap/bind)."""
         match self.inner:
             case Ok(value=value):
                 return func(value)
@@ -75,7 +53,6 @@ class Result(Generic[F, S]):
                 return Result(Err(error))
 
     def unwrap(self) -> S:
-        """Extract the success value or raise an exception."""
         match self.inner:
             case Ok(value=value):
                 return value
@@ -83,7 +60,6 @@ class Result(Generic[F, S]):
                 raise RuntimeError(f"Called unwrap on an Err value: {error}")
 
     def unwrap_or(self, default: S) -> S:
-        """Extract the success value or return default."""
         match self.inner:
             case Ok(value=value):
                 return value
@@ -92,17 +68,14 @@ class Result(Generic[F, S]):
 
     @property
     def is_ok(self) -> bool:
-        """Check if this is a success result."""
         return isinstance(self.inner, Ok)
 
     @property
     def is_err(self) -> bool:
-        """Check if this is an error result."""
         return isinstance(self.inner, Err)
 
     @staticmethod
     def traverse(items: List[T], func: Callable[[T], "Result[F, S]"]) -> "Result[F, List[S]]":
-        """Apply function to each item, collecting results."""
         results = []
         for item in items:
             result = func(item)
@@ -115,10 +88,6 @@ class Result(Generic[F, S]):
 
 
 def try_catch(func: Callable[[], S]) -> Result[Exception, S]:
-    """
-    Execute a function and wrap the result in Result type.
-    Captures any exception and returns it as Err.
-    """
     try:
         return Result(Ok(func()))
     except Exception as e:
@@ -126,10 +95,6 @@ def try_catch(func: Callable[[], S]) -> Result[Exception, S]:
 
 
 def safe(func: Callable[..., S]) -> Callable[..., Result[Exception, S]]:
-    """
-    Decorator that wraps a function to return Result instead of raising exceptions.
-    """
-
     def wrapper(*args: Any, **kwargs: Any) -> Result[Exception, S]:
         return try_catch(lambda: func(*args, **kwargs))
 
@@ -137,10 +102,6 @@ def safe(func: Callable[..., S]) -> Callable[..., Result[Exception, S]]:
 
 
 async def async_try_catch(func: Callable[[], Awaitable[S]]) -> Result[Exception, S]:
-    """
-    Execute an async function and wrap the result in Result type.
-    Captures any exception and returns it as Err.
-    """
     try:
         return Result(Ok(await func()))
     except Exception as e:
@@ -148,10 +109,6 @@ async def async_try_catch(func: Callable[[], Awaitable[S]]) -> Result[Exception,
 
 
 def async_safe(func: Callable[..., Awaitable[S]]) -> Callable[..., Awaitable[Result[Exception, S]]]:
-    """
-    Decorator that wraps an async function to return Result instead of raising exceptions.
-    """
-
     async def wrapper(*args: Any, **kwargs: Any) -> Result[Exception, S]:
         return await async_try_catch(lambda: func(*args, **kwargs))
 

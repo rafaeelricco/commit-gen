@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Quick Assistant - CLI Tool for productivity."""
 
 import sys
 import asyncio
@@ -14,12 +13,10 @@ from domains.commit.command.commit import execute_commit
 
 class QuickAssistant:
     def __init__(self):
-        """Initialize the CLI application."""
         load_dotenv()
         self.parser = create_parser()
 
     def run(self, args: Optional[List[str]] = None) -> int:
-        """Run the CLI application."""
         try:
             namespace = self.parser.parse_args(args)
             parsed_args = ParsedArgs(command=getattr(namespace, "command", None))
@@ -42,7 +39,6 @@ class QuickAssistant:
 
 
 def main() -> int:
-    """Main entry point for the application."""
     from common.updater import check_and_update
 
     check_and_update()

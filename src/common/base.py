@@ -1,64 +1,21 @@
-"""
-Base classes and data structures for the application.
-
-This module provides fundamental building blocks for immutable data structures
-used throughout the application, ensuring consistency and type safety.
-"""
-
 from pydantic import BaseModel, ConfigDict
 from common.json import FromJSON, ToJSON
 
 
 class BaseFrozen(BaseModel):
-    """
-    A frozen base model class
-    """
-
-    model_config = ConfigDict(
-        strict=True,  # no type coercion
-        frozen=True,  # make immutable
-        arbitrary_types_allowed=False,  # properties that don't inherit from BaseModel
-        extra="forbid",  # disallow extra fields
-    )
+    model_config = ConfigDict(strict=True, frozen=True, arbitrary_types_allowed=False, extra="forbid")
 
 
 class BaseMutable(BaseModel):
-    """
-    A mutable base model class
-    """
-
-    model_config = ConfigDict(
-        strict=True,  # no type coercion
-        frozen=False,  # make mutable
-        arbitrary_types_allowed=False,  # properties that don't inherit from BaseModel
-        extra="forbid",  # disallow extra fields
-    )
+    model_config = ConfigDict(strict=True, frozen=False, arbitrary_types_allowed=False, extra="forbid")
 
 
 class BaseMutableArbitrary(BaseModel):
-    """
-    A mutable base model class
-    """
-
-    model_config = ConfigDict(
-        strict=True,  # no type coercion
-        frozen=False,  # make mutable
-        arbitrary_types_allowed=True,  # properties that don't inherit from BaseModel
-        extra="forbid",  # disallow extra fields
-    )
+    model_config = ConfigDict(strict=True, frozen=False, arbitrary_types_allowed=True, extra="forbid")
 
 
 class BaseFrozenArbitrary(BaseModel):
-    """
-    A mutable base model class
-    """
-
-    model_config = ConfigDict(
-        strict=True,  # no type coercion
-        frozen=True,  # make mutable
-        arbitrary_types_allowed=True,  # properties that don't inherit from BaseModel
-        extra="forbid",  # disallow extra fields
-    )
+    model_config = ConfigDict(strict=True, frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
 
 class BaseSerializable(BaseFrozen, FromJSON, ToJSON):

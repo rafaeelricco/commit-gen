@@ -1,5 +1,3 @@
-"""Auto-update functionality for quick-assistant."""
-
 import json
 import subprocess
 import sys
@@ -13,17 +11,15 @@ from packaging.version import Version
 
 PACKAGE_NAME = "quick-assistant"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-CHECK_INTERVAL = 3600 * 24  # 24 hours
+CHECK_INTERVAL = 3600 * 24
 CACHE_FILE = Path.home() / ".quick-assistant" / "update-cache.json"
 
 
 def get_current_version() -> str:
-    """Get currently installed version."""
     return version(PACKAGE_NAME)
 
 
 def get_latest_version() -> Optional[str]:
-    """Fetch latest version from PyPI."""
     try:
         response = requests.get(PYPI_URL, timeout=3)
         response.raise_for_status()
@@ -33,7 +29,6 @@ def get_latest_version() -> Optional[str]:
 
 
 def should_check_update() -> bool:
-    """Check if enough time has passed since last check."""
     CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     if not CACHE_FILE.exists():
@@ -48,13 +43,11 @@ def should_check_update() -> bool:
 
 
 def save_check_timestamp() -> None:
-    """Save current timestamp to cache."""
     CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     CACHE_FILE.write_text(json.dumps({"last_check": time.time()}))
 
 
 def update_package() -> bool:
-    """Perform the actual update using pipx or pip."""
     try:
         result = subprocess.run(["pipx", "upgrade", PACKAGE_NAME], capture_output=True, text=True)
         if result.returncode == 0:
@@ -69,7 +62,6 @@ def update_package() -> bool:
 
 
 def check_and_update() -> None:
-    """Check for updates and auto-update if available."""
     if not should_check_update():
         return
 
@@ -93,7 +85,6 @@ def check_and_update() -> None:
 
 
 def execute_update() -> int:
-    """Manual update command."""
     try:
         current = get_current_version()
     except Exception:
