@@ -2,11 +2,10 @@ import os
 import subprocess
 import tempfile
 
-from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional, Union
 from google import genai
 from google.genai import types
-from common.base import BaseFrozen, ToJSON
+from common.base import BaseFrozen, BaseFrozenArbitrary, BaseSerializable
 from common.command.base_command import BaseCommand
 from common.command.base_command_handler import BaseCommandHandler
 from common.command.execute_command_handler import json_response, execute_command_handler
@@ -16,98 +15,70 @@ from common.result import Result, Ok, Err, async_try_catch
 from rich.console import Console
 
 
-# =============================================================================
-# Domain Types
-# =============================================================================
-
 Action = Literal["generate"]
 Selection = Literal["commit", "commit_push", "regenerate", "adjust", "cancel"]
 
 
-@dataclass(frozen=True)
-class MissingApiKey:
+class MissingApiKey(BaseFrozen):
     pass
 
 
-@dataclass(frozen=True)
-class NotGitRepo:
+class NotGitRepo(BaseFrozen):
     pass
 
 
-@dataclass(frozen=True)
-class GitError:
+class GitError(BaseFrozen):
     message: str
 
 
-@dataclass(frozen=True)
-class NoStagedChanges:
+class NoStagedChanges(BaseFrozen):
     pass
 
 
-@dataclass(frozen=True)
-class EmptyAIResponse:
+class EmptyAIResponse(BaseFrozen):
     pass
 
 
-@dataclass(frozen=True)
-class UnsupportedAction:
+class UnsupportedAction(BaseFrozen):
     action: str
 
 
 CommitError = Union[MissingApiKey, NotGitRepo, GitError, NoStagedChanges, EmptyAIResponse, UnsupportedAction]
 
 
-@dataclass(frozen=True)
-class CommitState:
+class CommitState(BaseFrozen):
     api_key: str
     cwd: str
     diff: str
     message: str
 
     def with_message(self, new_message: str) -> "CommitState":
-        return CommitState(
-            api_key=self.api_key,
-            cwd=self.cwd,
-            diff=self.diff,
-            message=new_message,
-        )
+        return self.model_copy(update={"message": new_message})
 
 
-@dataclass(frozen=True)
-class RegenerateSignal:
+class RegenerateSignal(BaseFrozenArbitrary):
     state: CommitState
 
 
-@dataclass(frozen=True)
-class AdjustSignal:
+class AdjustSignal(BaseFrozenArbitrary):
     state: CommitState
 
 
 LoopResult = Union["CommandResponse", RegenerateSignal, AdjustSignal]
 
 
-# =============================================================================
-# Command / Response
-# =============================================================================
-
 class Command(BaseCommand):
-    """Commit command input."""
     action: str
 
 
-class CommandResponse(BaseFrozen, ToJSON):
+class CommandResponse(BaseSerializable):
     message: str
     commit_message: Optional[str] = None
     action: Optional[str] = None
     git_output: Optional[str] = None
 
 
-# =============================================================================
-# Pure Validation Functions
-# =============================================================================
-
 def validate_api_key() -> Result[MissingApiKey, str]:
-    """Pure: returns Result with API key or MissingApiKey error."""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         return Result.err(MissingApiKey())
@@ -115,46 +86,29 @@ def validate_api_key() -> Result[MissingApiKey, str]:
 
 
 def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
-    """Pure: checks if path is inside a git repository."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
-        capture_output=True,
-        text=True,
-        cwd=path,
-    )
+    result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, cwd=path)
     if result.returncode != 0:
         return Result.err(NotGitRepo())
     return Result.ok(path)
 
 
 def get_staged_diff(path: str) -> Result[Union[GitError, NoStagedChanges], str]:
-    """Pure: returns staged diff or error."""
-    result = subprocess.run(
-        ["git", "diff", "--staged"],
-        capture_output=True,
-        text=True,
-        cwd=path,
-    )
+    result = subprocess.run(["git", "diff", "--staged"], capture_output=True, cwd=path)
     if result.returncode != 0:
-        return Result.err(GitError(message=result.stderr.strip() or "Failed to get staged changes"))
-    if not result.stdout.strip():
+        return Result.err(GitError(message=result.stderr.decode("utf-8", errors="replace").strip() or "Failed to get staged changes"))
+    stdout = result.stdout.decode("utf-8", errors="replace")
+    if not stdout.strip():
         return Result.err(NoStagedChanges())
-    return Result.ok(result.stdout)
+    return Result.ok(stdout)
 
 
 def validate_action(action: str) -> Result[UnsupportedAction, Action]:
-    """Pure: validates action is supported."""
     if action != "generate":
         return Result.err(UnsupportedAction(action=action))
     return Result.ok("generate")
 
 
-# =============================================================================
-# Effect Wrappers
-# =============================================================================
-
 async def generate_message(api_key: str, diff: str) -> Result[Union[Exception, EmptyAIResponse], str]:
-    """Wraps AI call in Result."""
     result = await async_try_catch(lambda: _generate_message_impl(api_key, diff))
     match result.inner:
         case Ok(value=msg):
@@ -171,8 +125,7 @@ async def _generate_message_impl(api_key: str, diff: str) -> str:
             model="models/gemini-flash-latest",
             contents=diff,
             config=types.GenerateContentConfig(
-                system_instruction=prompt_commit_message(diff),
-                response_mime_type="text/plain",
+                system_instruction=prompt_commit_message(diff), response_mime_type="text/plain"
             ),
         )
     return _extract_text(response)
@@ -181,7 +134,6 @@ async def _generate_message_impl(api_key: str, diff: str) -> str:
 async def refine_message(
     api_key: str, current_message: str, adjustment: str, diff: str
 ) -> Result[Union[Exception, EmptyAIResponse], str]:
-    """Wraps refinement call in Result."""
     result = await async_try_catch(lambda: _refine_message_impl(api_key, current_message, adjustment, diff))
     match result.inner:
         case Ok(value=msg):
@@ -197,49 +149,34 @@ async def _refine_message_impl(api_key: str, current_message: str, adjustment: s
         "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. "
         "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
     )
-    contents = f"<diff>\n{diff}\n</diff>\n<current>\n{current_message}\n</current>\n<adjustment>\n{adjustment}\n</adjustment>"
+    contents = (
+        f"<diff>\n{diff}\n</diff>\n<current>\n{current_message}\n</current>\n<adjustment>\n{adjustment}\n</adjustment>"
+    )
     with spinner("Refining…", spinner_style="dots"):
         response = await genai.Client(api_key=api_key).aio.models.generate_content(
             model="models/gemini-flash-latest",
             contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                response_mime_type="text/plain",
-            ),
+            config=types.GenerateContentConfig(system_instruction=system, response_mime_type="text/plain"),
         )
     return _extract_text(response)
 
 
 def _extract_text(response: types.GenerateContentResponse) -> str:
     candidates = getattr(response, "candidates", ()) or ()
-    parts = tuple(
-        p
-        for c in candidates
-        for p in (getattr(getattr(c, "content", None), "parts", ()) or ())
-    )
+    parts = tuple(p for c in candidates for p in (getattr(getattr(c, "content", None), "parts", ()) or ()))
     return "".join(text for p in parts if (text := getattr(p, "text", None)))
 
 
 def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
-    """Pure: wraps git commit in Result."""
     with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
         tmp.write(message)
         tmp_path = tmp.name
     try:
-        result = subprocess.run(
-            ["git", "commit", "-F", tmp_path],
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-        )
+        result = subprocess.run(["git", "commit", "-F", tmp_path], capture_output=True, text=True, cwd=cwd)
         output = (result.stdout or "") + (result.stderr or "")
         if result.returncode != 0:
             return Result.err(GitError(message=output.strip() or "Commit failed"))
-        # Filter to stats only (skip [branch hash] commit message line)
-        stats_only = "\n".join(
-            line for line in output.strip().split("\n")
-            if not line.startswith("[")
-        )
+        stats_only = "\n".join(line for line in output.strip().split("\n") if not line.startswith("["))
         return Result.ok("\n" + stats_only + "\n")
     finally:
         try:
@@ -249,28 +186,14 @@ def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
 
 
 def perform_push(cwd: str) -> Result[GitError, str]:
-    """Pure: wraps git push in Result."""
-    result = subprocess.run(
-        ["git", "push"],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
+    result = subprocess.run(["git", "push"], capture_output=True, text=True, cwd=cwd)
     output = (result.stdout or "") + (result.stderr or "")
     if result.returncode != 0:
         return Result.err(GitError(message=output.strip() or "Push failed"))
     return Result.ok(output)
 
 
-# =============================================================================
-# Action Handlers (Pattern Matching)
-# =============================================================================
-
-def handle_selection(
-    selection: Selection,
-    state: CommitState,
-) -> Result[CommitError, LoopResult]:
-    """Exhaustive pattern match on selection."""
+def handle_selection(selection: Selection, state: CommitState) -> Result[CommitError, LoopResult]:
     match selection:
         case "commit":
             commit_result = perform_commit(state.message, state.cwd)
@@ -280,10 +203,7 @@ def handle_selection(
                 case Ok(value=commit_output):
                     return Result[CommitError, LoopResult].ok(
                         CommandResponse(
-                            message="commit",
-                            commit_message=state.message,
-                            action="commit",
-                            git_output=commit_output,
+                            message="commit", commit_message=state.message, action="commit", git_output=commit_output
                         )
                     )
         case "commit_push":
@@ -306,19 +226,14 @@ def handle_selection(
                                 )
                             )
         case "regenerate":
-            return Result.ok(RegenerateSignal(state))
+            return Result.ok(RegenerateSignal(state=state))
         case "adjust":
-            return Result.ok(AdjustSignal(state))
+            return Result.ok(AdjustSignal(state=state))
         case "cancel":
             return Result.ok(CommandResponse(message="cancelled", commit_message=state.message, action="cancel"))
 
 
-# =============================================================================
-# Interaction Loop (Recursive)
-# =============================================================================
-
 async def interaction_loop(state: CommitState, console: Console) -> Result[CommitError, CommandResponse]:
-    """Recursive: regenerate/adjust restart loop with inline error retry."""
     console.print("")
     console.print(state.message)
     console.print("")
@@ -369,13 +284,7 @@ async def interaction_loop(state: CommitState, console: Console) -> Result[Commi
             return Result.err(e)
 
 
-# =============================================================================
-# Main Flow Composition
-# =============================================================================
-
 async def execute_commit_flow(action: str, console: Console) -> Result[CommitError, CommandResponse]:
-    """Compose validation -> generation -> interaction loop."""
-    # Validate action
     action_result = validate_action(action)
     match action_result.inner:
         case Err(error=action_err):
@@ -383,7 +292,6 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok():
             pass
 
-    # Validate API key
     api_key_result = validate_api_key()
     match api_key_result.inner:
         case Err(error=key_err):
@@ -391,7 +299,6 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok(value=api_key):
             pass
 
-    # Validate git repo
     cwd = os.getcwd()
     repo_result = validate_git_repo(cwd)
     match repo_result.inner:
@@ -400,7 +307,6 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok():
             pass
 
-    # Get staged diff
     diff_result = get_staged_diff(cwd)
     match diff_result.inner:
         case Err(error=diff_err):
@@ -408,7 +314,6 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok(value=diff):
             pass
 
-    # Generate initial message
     gen_result = await generate_message(api_key, diff)
     match gen_result.inner:
         case Err(error=gen_err):
@@ -420,17 +325,11 @@ async def execute_commit_flow(action: str, console: Console) -> Result[CommitErr
         case Ok(value=message):
             pass
 
-    # Run interaction loop
     initial_state = CommitState(api_key=api_key, cwd=cwd, diff=diff, message=message)
     return await interaction_loop(initial_state, console)
 
 
-# =============================================================================
-# Error to Response Mapping
-# =============================================================================
-
 def error_to_response(error: CommitError) -> tuple[Dict[str, Any], int]:
-    """Map domain errors to HTTP responses."""
     match error:
         case MissingApiKey():
             msg = "GOOGLE_API_KEY not found in environment. Set it in .env file"
@@ -448,15 +347,8 @@ def error_to_response(error: CommitError) -> tuple[Dict[str, Any], int]:
     return {"error": {"message": msg}}, 400
 
 
-# =============================================================================
-# Handler Adapter
-# =============================================================================
-
 class Handler(BaseCommandHandler[Command]):
-    """Handler for commit command execution."""
-
     async def handle_command(self, command: Command) -> tuple[Dict[str, Any], int]:
-        """Execute google-genai to analyze the diffs to generate a commit message."""
         console = Console()
         result = await execute_commit_flow(command.action, console)
 
@@ -470,22 +362,7 @@ class Handler(BaseCommandHandler[Command]):
                 return error_to_response(e)
 
 
-# =============================================================================
-# CLI Entry Point
-# =============================================================================
-
 async def execute_commit(action: Optional[str]) -> int:
-    """
-    Execute commit command with CLI validation.
-
-    Validates input, constructs command, and executes handler.
-
-    Args:
-        action: The commit action to execute (e.g., "generate")
-
-    Returns:
-        Exit code: 0 for success, 1 for failure
-    """
     console = Console()
 
     try:
@@ -498,7 +375,7 @@ async def execute_commit(action: Optional[str]) -> int:
         response, status_code = await execute_command_handler(Command, request_data, Handler)
 
         if status_code != 200:
-            error_msg = response.get('error', {}).get('message', 'Unknown error')
+            error_msg = response.get("error", {}).get("message", "Unknown error")
             console.print(f"[red]{error_msg}[/red]")
 
         return 0 if status_code == 200 else 1
