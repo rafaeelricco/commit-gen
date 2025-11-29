@@ -103,21 +103,38 @@ def save_check_timestamp() -> None:
 
 
 def update_package() -> Result[SubprocessError, None]:
+    """Attempt to update via pipx first, then fall back to pip.
+
+    Handles missing executables (e.g., pipx not in PATH on Windows) gracefully.
+    """
+
+    def run_command(cmd: list[str]) -> Result[SubprocessError, subprocess.CompletedProcess[str]]:
+        try:
+            completed = subprocess.run(cmd, capture_output=True, text=True)
+            return Result.ok(completed)
+        except FileNotFoundError as e:
+            return Result.err(SubprocessError(command=" ".join(cmd), exit_code=127, stderr=str(e)))
+
     pipx_cmd = ["pipx", "upgrade", PACKAGE_NAME]
-    result = subprocess.run(pipx_cmd, capture_output=True, text=True)
-
-    if result.returncode == 0:
-        return Result.ok(None)
-
     pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
-    pip_result = subprocess.run(pip_cmd, capture_output=True, text=True)
 
-    if pip_result.returncode == 0:
-        return Result.ok(None)
+    pipx_result = run_command(pipx_cmd)
+    match pipx_result.inner:
+        case Ok(value=cp) if cp.returncode == 0:
+            return Result.ok(None)
+        case _:
+            # Ignore pipx failures (missing or error) and try pip next
+            pass
 
-    stderr = pip_result.stderr or result.stderr or "Unknown error"
-    cmd_str = " ".join(pip_cmd) if pip_result.returncode != 0 else " ".join(pipx_cmd)
-    return Result.err(SubprocessError(command=cmd_str, exit_code=pip_result.returncode, stderr=stderr))
+    pip_result = run_command(pip_cmd)
+    match pip_result.inner:
+        case Ok(value=cp) if cp.returncode == 0:
+            return Result.ok(None)
+        case Ok(value=cp):
+            stderr = cp.stderr or cp.stdout or "Unknown error"
+            return Result.err(SubprocessError(command=" ".join(pip_cmd), exit_code=cp.returncode, stderr=stderr))
+        case Err(error=err):
+            return Result.err(err)
 
 
 def check_and_update() -> None:
