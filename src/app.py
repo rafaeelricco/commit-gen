@@ -6,6 +6,7 @@ import asyncio
 from dotenv import load_dotenv
 from typing import List, Optional
 
+from common.updater import check_and_update
 from common.arguments import CommandType, ParsedArgs, create_parser
 from common.config import is_ready
 from common.doctor import execute_doctor
@@ -50,8 +51,6 @@ class QuickAssistant:
 
 
 def main() -> int:
-    from common.updater import check_and_update
-
     check_and_update()
 
     app = QuickAssistant()

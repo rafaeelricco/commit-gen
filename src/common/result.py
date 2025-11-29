@@ -1,6 +1,7 @@
 from typing import TypeVar, Generic, Callable, Union, List, Any, Awaitable
 from dataclasses import dataclass
 
+
 F = TypeVar("F")
 S = TypeVar("S")
 T = TypeVar("T")
@@ -10,11 +11,9 @@ T = TypeVar("T")
 class Err(Generic[F]):
     error: F
 
-
 @dataclass(frozen=True)
 class Ok(Generic[S]):
     value: S
-
 
 Unwrapped = Union[Err[F], Ok[S]]
 

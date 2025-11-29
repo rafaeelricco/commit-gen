@@ -16,10 +16,8 @@ from common.result import Result, Ok, Err, async_try_catch
 class InvalidApiKey(BaseFrozen):
     message: str
 
-
 class SetupCancelled(BaseFrozen):
     pass
-
 
 SetupError = Union[InvalidApiKey, ConfigWriteError, SetupCancelled]
 

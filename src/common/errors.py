@@ -8,22 +8,18 @@ class Fail(Exception):
     message: str
     details: Optional[Any] = None
 
-
 @dataclass(frozen=True)
 class Forbidden(Exception):
     message: str
-
 
 @dataclass(frozen=True)
 class Unauthorized(Exception):
     message: str
 
-
 @dataclass(frozen=True)
 class BadRequest(Exception):
     message: str
     details: Optional[Any] = None
-
 
 @dataclass(frozen=True)
 class InternalServerError(Exception):

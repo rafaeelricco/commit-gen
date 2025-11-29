@@ -22,13 +22,13 @@ from common.reflection import concrete_type_hints, get_type_constructor, Unbound
 from common.result import Result, Ok, Err
 from pydantic import ValidationError
 
+
 T = TypeVar("T")
 
 
 class ParsingOptions(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, arbitrary_types_allowed=False, extra="forbid")
     fill_missing_optionals: bool
-
 
 defaultParsingOptions = ParsingOptions(fill_missing_optionals=False)
 

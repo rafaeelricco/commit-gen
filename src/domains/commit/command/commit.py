@@ -23,26 +23,20 @@ Selection = Literal["commit", "commit_push", "regenerate", "adjust", "cancel"]
 class MissingApiKey(BaseFrozen):
     pass
 
-
 class NotGitRepo(BaseFrozen):
     pass
-
 
 class GitError(BaseFrozen):
     message: str
 
-
 class NoStagedChanges(BaseFrozen):
     pass
-
 
 class EmptyAIResponse(BaseFrozen):
     pass
 
-
 class UnsupportedAction(BaseFrozen):
     action: str
-
 
 CommitError = Union[MissingApiKey, NotGitRepo, GitError, NoStagedChanges, EmptyAIResponse, UnsupportedAction]
 
@@ -58,21 +52,17 @@ class CommitState(BaseFrozen):
     def with_message(self, new_message: str) -> "CommitState":
         return self.model_copy(update={"message": new_message})
 
-
 class RegenerateSignal(BaseFrozenArbitrary):
     state: CommitState
 
-
 class AdjustSignal(BaseFrozenArbitrary):
     state: CommitState
-
 
 LoopResult = Union["CommandResponse", RegenerateSignal, AdjustSignal]
 
 
 class Command(BaseCommand):
     action: str
-
 
 class CommandResponse(BaseSerializable):
     message: str

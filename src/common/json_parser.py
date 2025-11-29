@@ -2,6 +2,7 @@ from typing import Type, TypeVar, Dict, Any
 from common.result import Result, Ok, Err
 from pydantic import BaseModel, ValidationError
 
+
 T = TypeVar("T", bound=BaseModel)
 
 
