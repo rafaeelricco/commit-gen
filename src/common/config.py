@@ -15,26 +15,38 @@ class CommitConvention(str, Enum):
     IMPERATIVE = "imperative"
     CUSTOM = "custom"
 
-
 class Config(BaseFrozen):
     api_key: str
     commit_convention: CommitConvention
     custom_template: Optional[str] = None
 
-
 class ConfigNotFound(BaseFrozen):
     path: str
-
 
 class ConfigParseError(BaseFrozen):
     message: str
 
-
 class ConfigWriteError(BaseFrozen):
     message: str
 
-
 ConfigError = Union[ConfigNotFound, ConfigParseError, ConfigWriteError]
+
+
+def error_to_message(error: ConfigError) -> str:
+    match error:
+        case ConfigNotFound(path=p):
+            return f"Config not found at {p}"
+        case ConfigParseError(message=m):
+            return f"Config parse error: {m}"
+        case ConfigWriteError(message=m):
+            return f"Config write error: {m}"
+
+
+def validate_commit_convention(value: str) -> Result[ConfigParseError, CommitConvention]:
+    try:
+        return Result.ok(CommitConvention(value))
+    except ValueError:
+        return Result.err(ConfigParseError(message=f"Invalid commit convention: {value}"))
 
 
 def get_home_path() -> Path:
@@ -68,19 +80,22 @@ def load_config() -> Result[ConfigError, Config]:
 
     parse_result = try_catch(lambda: json.loads(content))
     match parse_result.inner:
-        case Err(error=e):
-            return Result.err(ConfigParseError(message=str(e)))
+        case Err(error=parse_err):
+            return Result.err(ConfigParseError(message=str(parse_err)))
         case Ok(value=data):
-            try:
-                # Ensure enum fields are validated before creating the Config model
-                data["commit_convention"] = CommitConvention(data["commit_convention"])
-            except (KeyError, ValueError) as e:
-                return Result.err(ConfigParseError(message=str(e)))
+            pass
+
+    convention_result = validate_commit_convention(data.get("commit_convention", ""))
+    match convention_result.inner:
+        case Err(error=conv_err):
+            return Result.err(conv_err)
+        case Ok(value=convention):
+            data["commit_convention"] = convention
 
     validate_result = try_catch(lambda: Config(**data))
     match validate_result.inner:
-        case Err(error=e):
-            return Result.err(ConfigParseError(message=str(e)))
+        case Err(error=validation_err):
+            return Result.err(ConfigParseError(message=str(validation_err)))
         case Ok(value=config):
             return Result.ok(config)
 
