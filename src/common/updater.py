@@ -2,13 +2,15 @@ import json
 import subprocess
 import sys
 import time
-from importlib.metadata import version
-from typing import Optional
+from importlib.metadata import PackageNotFoundError, version
+from typing import Union
 
 import requests
 from packaging.version import Version
 
+from common.base import BaseFrozen
 from common.config import get_config_dir
+from common.result import Err, Ok, Result
 
 PACKAGE_NAME = "quick-assistant"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
@@ -16,17 +18,69 @@ CHECK_INTERVAL = 3600 * 24
 CACHE_FILE = get_config_dir() / "update-cache.json"
 
 
-def get_current_version() -> str:
-    return version(PACKAGE_NAME)
+# Error Types
+class NetworkError(BaseFrozen):
+    url: str
+    message: str
 
 
-def get_latest_version() -> Optional[str]:
+class VersionCheckError(BaseFrozen):
+    message: str
+
+
+class PackageNotInstalled(BaseFrozen):
+    package: str
+
+
+class SubprocessError(BaseFrozen):
+    command: str
+    exit_code: int
+    stderr: str
+
+
+class CacheError(BaseFrozen):
+    path: str
+    message: str
+
+
+UpdateError = Union[NetworkError, VersionCheckError, PackageNotInstalled, SubprocessError, CacheError]
+
+
+def format_update_error(error: UpdateError) -> str:
+    match error:
+        case NetworkError(url=url, message=msg):
+            return f"Network error fetching {url}: {msg}"
+        case VersionCheckError(message=msg):
+            return f"Version check failed: {msg}"
+        case PackageNotInstalled(package=pkg):
+            return f"Package '{pkg}' not installed"
+        case SubprocessError(command=cmd, exit_code=code, stderr=err):
+            return f"Command '{cmd}' failed (exit {code}): {err.strip()}"
+        case CacheError(path=path, message=msg):
+            return f"Cache error at {path}: {msg}"
+        case _:
+            return "Unknown error"
+
+
+def get_current_version() -> Result[PackageNotInstalled, str]:
+    try:
+        return Result.ok(version(PACKAGE_NAME))
+    except PackageNotFoundError:
+        return Result.err(PackageNotInstalled(package=PACKAGE_NAME))
+
+
+def get_latest_version() -> Result[Union[NetworkError, VersionCheckError], str]:
     try:
         response = requests.get(PYPI_URL, timeout=3)
         response.raise_for_status()
-        return response.json()["info"]["version"]
-    except Exception:
-        return None
+    except requests.RequestException as e:
+        return Result.err(NetworkError(url=PYPI_URL, message=str(e)))
+
+    try:
+        data = response.json()
+        return Result.ok(data["info"]["version"])
+    except (json.JSONDecodeError, KeyError) as e:
+        return Result.err(VersionCheckError(message=f"Invalid PyPI response: {e}"))
 
 
 def should_check_update() -> bool:
@@ -48,18 +102,22 @@ def save_check_timestamp() -> None:
     CACHE_FILE.write_text(json.dumps({"last_check": time.time()}))
 
 
-def update_package() -> bool:
-    try:
-        result = subprocess.run(["pipx", "upgrade", PACKAGE_NAME], capture_output=True, text=True)
-        if result.returncode == 0:
-            return True
+def update_package() -> Result[SubprocessError, None]:
+    pipx_cmd = ["pipx", "upgrade", PACKAGE_NAME]
+    result = subprocess.run(pipx_cmd, capture_output=True, text=True)
 
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME], capture_output=True, check=True
-        )
-        return True
-    except Exception:
-        return False
+    if result.returncode == 0:
+        return Result.ok(None)
+
+    pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
+    pip_result = subprocess.run(pip_cmd, capture_output=True, text=True)
+
+    if pip_result.returncode == 0:
+        return Result.ok(None)
+
+    stderr = pip_result.stderr or result.stderr or "Unknown error"
+    cmd_str = " ".join(pip_cmd) if pip_result.returncode != 0 else " ".join(pipx_cmd)
+    return Result.err(SubprocessError(command=cmd_str, exit_code=pip_result.returncode, stderr=stderr))
 
 
 def check_and_update() -> None:
@@ -68,43 +126,58 @@ def check_and_update() -> None:
 
     save_check_timestamp()
 
-    try:
-        current = get_current_version()
-    except Exception:
-        return
+    current_result = get_current_version()
+    match current_result.inner:
+        case Err():
+            return
+        case Ok(value=current):
+            pass
 
-    latest = get_latest_version()
-
-    if latest is None or current == latest:
-        return
+    latest_result = get_latest_version()
+    match latest_result.inner:
+        case Err():
+            return
+        case Ok(value=latest):
+            pass
 
     if Version(latest) > Version(current):
         print(f"Updating quick-assistant {current} → {latest}...")
-        if update_package():
-            print("Update complete. Please restart the command.")
-            sys.exit(0)
+        update_result = update_package()
+        match update_result.inner:
+            case Ok():
+                print("Update complete. Please restart the command.")
+                sys.exit(0)
+            case Err(error=error):
+                print(f"Auto-update failed: {format_update_error(error)}")
 
 
 def execute_update() -> int:
-    try:
-        current = get_current_version()
-    except Exception:
-        print("Error: Could not determine current version.")
-        return 1
+    current_result = get_current_version()
+    match current_result.inner:
+        case Err(error=current_err):
+            print(f"Error: {format_update_error(current_err)}")
+            return 1
+        case Ok(value=current):
+            pass
 
-    latest = get_latest_version()
-    if latest is None:
-        print("Error: Could not fetch latest version from PyPI.")
-        return 1
+    latest_result = get_latest_version()
+    match latest_result.inner:
+        case Err(error=latest_err):
+            print(f"Error: {format_update_error(latest_err)}")
+            return 1
+        case Ok(value=latest):
+            pass
 
     if Version(latest) <= Version(current):
         print(f"Already at latest version ({current}).")
         return 0
 
     print(f"Updating quick-assistant {current} → {latest}...")
-    if update_package():
-        print("Update complete!")
-        return 0
-    else:
-        print("Update failed.")
-        return 1
+    update_result = update_package()
+    match update_result.inner:
+        case Ok():
+            print("Update complete!")
+            return 0
+        case Err(error=update_err):
+            print(f"Update failed: {format_update_error(update_err)}")
+            return 1
