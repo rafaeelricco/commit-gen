@@ -1,6 +1,6 @@
 [project]
 name = "quick-assistant"
-version = "0.2.3"
+version = "0.2.4"
 description = "Global CLI tool for productivity"
 authors = [{ name = "Rafael Ricco", email = "rafaelricco10@gmail.com" }]
 readme = "README.md"

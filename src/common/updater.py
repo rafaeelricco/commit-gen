@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import time
+from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version
 from typing import Union
 
@@ -16,6 +17,8 @@ PACKAGE_NAME = "quick-assistant"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 CHECK_INTERVAL = 3600 * 24
 CACHE_FILE = get_config_dir() / "update-cache.json"
+UV_TOOL_PATH_PART = "uv"
+UV_TOOL_NAME = "quick-assistant"
 
 
 # Error Types
@@ -103,9 +106,9 @@ def save_check_timestamp() -> None:
 
 
 def update_package() -> Result[SubprocessError, None]:
-    """Attempt to update via pipx first, then fall back to pip.
+    """Attempt to update via uv tool (if installed that way), then pipx, then pip.
 
-    Handles missing executables (e.g., pipx not in PATH on Windows) gracefully.
+    Handles missing executables (e.g., uv or pipx not in PATH) gracefully.
     """
 
     def run_command(cmd: list[str]) -> Result[SubprocessError, subprocess.CompletedProcess[str]]:
@@ -115,8 +118,23 @@ def update_package() -> Result[SubprocessError, None]:
         except FileNotFoundError as e:
             return Result.err(SubprocessError(command=" ".join(cmd), exit_code=127, stderr=str(e)))
 
+    def is_uv_tool_install() -> bool:
+        exe_path = Path(sys.executable).resolve()
+        parts = [p.lower() for p in exe_path.parts]
+        return UV_TOOL_PATH_PART in parts and "tools" in parts and UV_TOOL_NAME in parts
+
+    uv_cmd = ["uv", "tool", "install", PACKAGE_NAME, "--force"]
     pipx_cmd = ["pipx", "upgrade", PACKAGE_NAME]
     pip_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
+
+    if is_uv_tool_install():
+        uv_result = run_command(uv_cmd)
+        match uv_result.inner:
+            case Ok(value=cp) if cp.returncode == 0:
+                return Result.ok(None)
+            case _:
+                # Ignore uv failures and try other managers
+                pass
 
     pipx_result = run_command(pipx_cmd)
     match pipx_result.inner:
