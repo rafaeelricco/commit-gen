@@ -235,7 +235,12 @@ def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
         output = (result.stdout or "") + (result.stderr or "")
         if result.returncode != 0:
             return Result.err(GitError(message=output.strip() or "Commit failed"))
-        return Result.ok(output)
+        # Filter to stats only (skip [branch hash] commit message line)
+        stats_only = "\n".join(
+            line for line in output.strip().split("\n")
+            if not line.startswith("[")
+        )
+        return Result.ok(stats_only)
     finally:
         try:
             os.unlink(tmp_path)
