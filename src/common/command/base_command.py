@@ -13,9 +13,9 @@ from pydantic import BaseModel, ConfigDict
 class BaseCommand(BaseModel, ABC):
     """
     Immutable base class for all commands in the CQRS system.
-    
+
     Provides automatic validation and serialization through Pydantic.
     Commands represent write operations and must be frozen to ensure immutability.
     """
-    
+
     model_config = ConfigDict(frozen=True)
