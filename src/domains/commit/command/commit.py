@@ -119,7 +119,7 @@ def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
     result = subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
         capture_output=True,
-        text=False,
+        text=True,
         cwd=path,
     )
     if result.returncode != 0:
