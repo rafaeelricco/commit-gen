@@ -29,20 +29,25 @@ class NetworkError(BaseFrozen):
     url: str
     message: str
 
+
 class VersionCheckError(BaseFrozen):
     message: str
 
+
 class PackageNotInstalled(BaseFrozen):
     package: str
+
 
 class SubprocessError(BaseFrozen):
     command: str
     exit_code: int
     stderr: str
 
+
 class CacheError(BaseFrozen):
     path: str
     message: str
+
 
 UpdateError = Union[NetworkError, VersionCheckError, PackageNotInstalled, SubprocessError, CacheError]
 UpdateMethod = Literal["uv", "pipx", "pip"]

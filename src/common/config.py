@@ -15,19 +15,24 @@ class CommitConvention(str, Enum):
     IMPERATIVE = "imperative"
     CUSTOM = "custom"
 
+
 class Config(BaseFrozen):
     api_key: str
     commit_convention: CommitConvention
     custom_template: Optional[str] = None
 
+
 class ConfigNotFound(BaseFrozen):
     path: str
+
 
 class ConfigParseError(BaseFrozen):
     message: str
 
+
 class ConfigWriteError(BaseFrozen):
     message: str
+
 
 ConfigError = Union[ConfigNotFound, ConfigParseError, ConfigWriteError]
 

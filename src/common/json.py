@@ -30,6 +30,7 @@ class ParsingOptions(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, arbitrary_types_allowed=False, extra="forbid")
     fill_missing_optionals: bool
 
+
 defaultParsingOptions = ParsingOptions(fill_missing_optionals=False)
 
 

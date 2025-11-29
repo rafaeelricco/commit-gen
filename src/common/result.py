@@ -11,9 +11,11 @@ T = TypeVar("T")
 class Err(Generic[F]):
     error: F
 
+
 @dataclass(frozen=True)
 class Ok(Generic[S]):
     value: S
+
 
 Unwrapped = Union[Err[F], Ok[S]]
 
