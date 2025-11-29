@@ -29,11 +29,6 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
-    "mypy>=1.17.0",
-]
-
 [tool.uv.sources]
 quick-assistant = { workspace = true }
 
@@ -52,3 +47,12 @@ packages = ["src"]
 mypy_path = "src"
 packages = ["common", "domains", "app"]
 explicit_package_bases = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
