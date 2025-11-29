@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 
 from enum import Enum
 from pathlib import Path
@@ -36,9 +37,20 @@ class ConfigWriteError(BaseFrozen):
 ConfigError = Union[ConfigNotFound, ConfigParseError, ConfigWriteError]
 
 
+def get_home_path() -> Path:
+    if platform.system() == "Windows":
+        userprofile = os.environ.get("USERPROFILE")
+        if userprofile:
+            return Path(userprofile)
+    return Path.home()
+
+
+def get_config_dir() -> Path:
+    return get_home_path() / ".quick-assistant"
+
+
 def get_config_path() -> Path:
-    home = Path.home()
-    return home / ".quick-assistant" / "config.json"
+    return get_config_dir() / "config.json"
 
 
 def load_config() -> Result[ConfigError, Config]:

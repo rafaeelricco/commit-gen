@@ -3,16 +3,17 @@ import subprocess
 import sys
 import time
 from importlib.metadata import version
-from pathlib import Path
 from typing import Optional
 
 import requests
 from packaging.version import Version
 
+from common.config import get_config_dir
+
 PACKAGE_NAME = "quick-assistant"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 CHECK_INTERVAL = 3600 * 24
-CACHE_FILE = Path.home() / ".quick-assistant" / "update-cache.json"
+CACHE_FILE = get_config_dir() / "update-cache.json"
 
 
 def get_current_version() -> str:
