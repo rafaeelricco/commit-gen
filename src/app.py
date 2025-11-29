@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""
-Quick Assistant - CLI Tool for Translation
-
-A command-line interface tool for quick text translation using AI.
-"""
+"""Quick Assistant - CLI Tool for productivity."""
 
 import sys
 import asyncio
@@ -13,7 +9,6 @@ from typing import List, Optional
 
 from common.arguments import CommandType, ParsedArgs, QuickCLIConfig, create_parser
 from common.updater import execute_update
-from domains.translate.command.translate import execute_translate
 from domains.commit.command.commit import execute_commit
 
 
@@ -27,14 +22,11 @@ class QuickAssistant:
         """Run the CLI application."""
         try:
             parsed_args = ParsedArgs(
-                translate=getattr(self.parser.parse_args(args), "translate", None),
                 commit=getattr(self.parser.parse_args(args), "commit", None),
                 update=getattr(self.parser.parse_args(args), "update", None),
             )
 
             match parsed_args.get_command_type():
-                case CommandType.TRANSLATE:
-                    return asyncio.run(execute_translate(parsed_args.translate))
                 case CommandType.COMMIT:
                     return asyncio.run(execute_commit(parsed_args.commit))
                 case CommandType.UPDATE:

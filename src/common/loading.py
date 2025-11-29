@@ -24,7 +24,7 @@ def spinner(message: str, spinner_style: str = "dots") -> Generator[None, None, 
         Control to calling code; spinner renders during block execution
 
     Examples:
-        with spinner("Translating to Portuguese…"):
+        with spinner("Generating commit message…"):
             result = await api_call()
 
         with spinner("Processing", spinner_style="arc"):

@@ -2,7 +2,7 @@
 Command-line argument parsing and configuration for the Quick Assistant CLI tool.
 
 This module provides utilities for parsing command-line arguments, defining command types,
-and configuring argument parsers for different CLI operations like translation.
+and configuring argument parsers for different CLI operations.
 """
 
 import argparse
@@ -16,17 +16,12 @@ class CommandType(Enum):
     """
     Enumeration of supported command types in the Quick Assistant CLI.
 
-    Defines the different operations that can be performed by the CLI tool,
-    mapping command names to their string identifiers.
-
     Attributes:
-        TRANSLATE: Translation command for converting text between languages
         COMMIT: Commit message generation command for git operations
         UPDATE: Update command for self-updating the CLI tool
         HELP: Help command displayed when no valid command is provided
     """
 
-    TRANSLATE = "translate"
     COMMIT = "commit"
     UPDATE = "update"
     HELP = "help"
@@ -42,7 +37,6 @@ class ParsedArgs(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    translate: Optional[str] = None
     commit: Optional[str] = None
     update: Optional[bool] = None
 
@@ -53,38 +47,12 @@ class ParsedArgs(BaseModel):
         Returns:
             CommandType: The identified command type, defaults to HELP if none specified.
         """
-        if self.translate:
-            return CommandType.TRANSLATE
-        elif self.commit:
+        if self.commit:
             return CommandType.COMMIT
         elif self.update:
             return CommandType.UPDATE
         else:
             return CommandType.HELP
-
-
-class TranslateCLIArguments:
-    """
-    Configuration class for translation CLI arguments.
-
-    Defines the command-line interface configuration for the translate command,
-    including help text, examples, and argument definitions.
-    """
-
-    flag = "--translate"
-    help = "Text to translate from any language to English"
-
-    @classmethod
-    def get_config(cls) -> Dict[str, Any]:
-        """
-        Return parser configuration for translate arguments.
-
-        Returns:
-            Dictionary containing parser configuration with keys:
-                - flag: Command flag string ("--translate")
-                - help: Help text describing the translation command's purpose
-        """
-        return {"flag": cls.flag, "help": cls.help}
 
 
 class CommitCLIArguments:
@@ -146,14 +114,13 @@ class QuickCLIConfig:
                 - prog: Program name ("quick")
                 - description: CLI tool description text
                 - epilog: Usage examples displayed in help text
-                - commands: List of command configuration dictionaries from
-                           TranslateCLIArguments and CommitCLIArguments
+                - commands: List of command configuration dictionaries
         """
         return {
             "prog": "quick",
             "description": cls.description,
             "epilog": cls.epilog,
-            "commands": [TranslateCLIArguments.get_config(), CommitCLIArguments.get_config(), UpdateCLIArguments.get_config()],
+            "commands": [CommitCLIArguments.get_config(), UpdateCLIArguments.get_config()],
         }
 
 

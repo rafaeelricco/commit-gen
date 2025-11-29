@@ -5,7 +5,7 @@ This module provides functions for converting application errors to HTTP respons
 and defines response type structures for consistent API communication.
 """
 
-from typing import Union, Any, Dict, TypedDict
+from typing import Union, Any, Dict
 from common.errors import Fail, Forbidden, Unauthorized, BadRequest, InternalServerError
 from common.json import to_json
 
@@ -43,18 +43,6 @@ def to_response(
         case InternalServerError():
             content = {"error": {"message": failure.message}}
             return content, 500
-
-
-class TranslateResponse(TypedDict):
-    """
-    Type definition for translation API response structure.
-
-    Defines the expected format for responses from translation endpoints,
-    ensuring type safety and consistent response structure.
-    """
-
-    translation: str
-    success: bool
 
 
 def json_response(data: Union[Dict[str, Any], Any], status: int = 200) -> tuple[Dict[str, Any], int]:
