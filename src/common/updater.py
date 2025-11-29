@@ -1,0 +1,92 @@
+"""Auto-update functionality for quick-assistant."""
+
+import json
+import subprocess
+import sys
+import time
+from importlib.metadata import version
+from pathlib import Path
+from typing import Optional
+
+import requests
+from packaging.version import Version
+
+PACKAGE_NAME = "quick-assistant"
+PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
+CHECK_INTERVAL = 86400  # 24 hours
+CACHE_FILE = Path.home() / ".quick-assistant" / "update-cache.json"
+
+
+def get_current_version() -> str:
+    """Get currently installed version."""
+    return version(PACKAGE_NAME)
+
+
+def get_latest_version() -> Optional[str]:
+    """Fetch latest version from PyPI."""
+    try:
+        response = requests.get(PYPI_URL, timeout=3)
+        response.raise_for_status()
+        return response.json()["info"]["version"]
+    except Exception:
+        return None
+
+
+def should_check_update() -> bool:
+    """Check if enough time has passed since last check."""
+    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    if not CACHE_FILE.exists():
+        return True
+
+    try:
+        data = json.loads(CACHE_FILE.read_text())
+        last_check = data.get("last_check", 0)
+        return time.time() - last_check > CHECK_INTERVAL
+    except Exception:
+        return True
+
+
+def save_check_timestamp() -> None:
+    """Save current timestamp to cache."""
+    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CACHE_FILE.write_text(json.dumps({"last_check": time.time()}))
+
+
+def update_package() -> bool:
+    """Perform the actual update using pipx or pip."""
+    try:
+        result = subprocess.run(["pipx", "upgrade", PACKAGE_NAME], capture_output=True, text=True)
+        if result.returncode == 0:
+            return True
+
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME], capture_output=True, check=True
+        )
+        return True
+    except Exception:
+        return False
+
+
+def check_and_update() -> None:
+    """Check for updates and auto-update if available."""
+    if not should_check_update():
+        return
+
+    save_check_timestamp()
+
+    try:
+        current = get_current_version()
+    except Exception:
+        return
+
+    latest = get_latest_version()
+
+    if latest is None or current == latest:
+        return
+
+    if Version(latest) > Version(current):
+        print(f"Updating quick-assistant {current} → {latest}...")
+        if update_package():
+            print("Update complete. Please restart the command.")
+            sys.exit(0)

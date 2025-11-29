@@ -49,6 +49,10 @@ class QuickAssistant:
 
 def main() -> int:
     """Main entry point for the application."""
+    from common.updater import check_and_update
+
+    check_and_update()
+
     app = QuickAssistant()
     return app.run(sys.argv[1:])
 

@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Global CLI tool for productivity - quick translate, document extraction, and search operations."
 authors = [{ name = "Rafael Ricco", email = "rafaelricco10@gmail.com" }]
 readme = "README.md"
+license = "MIT"
+
 requires-python = ">=3.11"
+
 dependencies = [
     "google-genai>=1.26.0",
     "pydantic>=2.11.7",
@@ -13,7 +16,12 @@ dependencies = [
     "charset-normalizer>=3.0.0",
     "rich>=14.0.0",
     "python-dotenv>=1.1.1",
+    "packaging>=24.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/rafaeelricco/quick-assistant"
+Repository = "https://github.com/rafaeelricco/quick-assistant"
 
 [project.scripts]
 quick = "app:main"
@@ -23,6 +31,7 @@ dev = [
     "mypy>=1.17.0",
     "quick-assistant",
     "ruff>=0.12.4",
+    "types-requests>=2.31.0",
 ]
 
 [build-system]
@@ -56,3 +65,15 @@ skip-magic-trailing-comma = true
 
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+commit_message = "chore(release): {version}"
+build_command = "uv build"
+upload_to_pypi = false
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]

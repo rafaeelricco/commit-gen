@@ -95,7 +95,9 @@ def validate_git_repo(path: str) -> Result[NotGitRepo, str]:
 def get_staged_diff(path: str) -> Result[Union[GitError, NoStagedChanges], str]:
     result = subprocess.run(["git", "diff", "--staged"], capture_output=True, cwd=path)
     if result.returncode != 0:
-        return Result.err(GitError(message=result.stderr.decode("utf-8", errors="replace").strip() or "Failed to get staged changes"))
+        return Result.err(
+            GitError(message=result.stderr.decode("utf-8", errors="replace").strip() or "Failed to get staged changes")
+        )
     stdout = result.stdout.decode("utf-8", errors="replace")
     if not stdout.strip():
         return Result.err(NoStagedChanges())
