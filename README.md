@@ -5,7 +5,11 @@ CLI tool for productivity, focused on quick daily operations.
 ### Installation
 
 ```bash
-npm install -g @rafaeelricco/quick-assistant
+# Recommended (isolated environment)
+pipx install quick-assistant
+
+# Or via pip
+pip install quick-assistant
 ```
 
 ### Requirements
@@ -35,3 +39,13 @@ quick --commit generate
 ### Examples
 - `quick --translate "hello world"`
 - `quick --commit generate`
+
+### Uninstall
+
+```bash
+# If installed with pipx
+pipx uninstall quick-assistant
+
+# If installed with pip
+pip uninstall quick-assistant
+```
