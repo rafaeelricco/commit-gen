@@ -364,14 +364,10 @@ class Handler(BaseCommandHandler[Command]):
                 return error_to_response(e)
 
 
-async def execute_commit(action: Optional[str]) -> int:
+async def execute_commit(action: str = "generate") -> int:
     console = Console()
 
     try:
-        if not action:
-            console.print("[red]Error: Commit action is required[/red]")
-            return 1
-
         request_data = {"action": action}
 
         response, status_code = await execute_command_handler(Command, request_data, Handler)

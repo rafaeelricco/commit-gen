@@ -7,7 +7,7 @@ and configuring argument parsers for different CLI operations.
 
 import argparse
 
-from typing import Dict, Any, Optional
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 from enum import Enum
 
@@ -31,129 +31,59 @@ class ParsedArgs(BaseModel):
     """
     Immutable container for parsed command-line arguments.
 
-    Holds the parsed values from CLI arguments and provides methods to determine
+    Holds the parsed command and provides methods to determine
     which command type was specified. Uses Pydantic's frozen model for immutability.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    commit: Optional[str] = None
-    update: Optional[bool] = None
+    command: Optional[str] = None
 
     def get_command_type(self) -> CommandType:
         """
-        Determine the command type based on which argument was provided.
+        Determine the command type based on the subcommand provided.
 
         Returns:
             CommandType: The identified command type, defaults to HELP if none specified.
         """
-        if self.commit:
-            return CommandType.COMMIT
-        elif self.update:
-            return CommandType.UPDATE
-        else:
-            return CommandType.HELP
-
-
-class CommitCLIArguments:
-    """
-    Configuration class for commit CLI arguments.
-
-    Defines the command-line interface configuration for the commit command,
-    including help text and argument definitions.
-    """
-
-    flag = "--commit"
-    help = "Generate a commit message"
-    choices = ["generate"]
-
-    @classmethod
-    def get_config(cls) -> Dict[str, Any]:
-        """
-        Return parser configuration for commit arguments.
-
-        Returns:
-            Dictionary containing parser configuration with keys:
-                - flag: Command flag string ("--commit")
-                - help: Help text describing the commit command's purpose
-                - choices: List of valid subcommands (e.g., ["generate"])
-        """
-        return {"flag": cls.flag, "help": cls.help, "choices": cls.choices}
-
-
-class UpdateCLIArguments:
-    """Configuration class for update CLI arguments."""
-
-    flag = "--update"
-    help = "Update quick-assistant to the latest version"
-
-    @classmethod
-    def get_config(cls) -> Dict[str, Any]:
-        """Return parser configuration for update arguments."""
-        return {"flag": cls.flag, "help": cls.help, "action": "store_true"}
+        match self.command:
+            case "commit":
+                return CommandType.COMMIT
+            case "update":
+                return CommandType.UPDATE
+            case _:
+                return CommandType.HELP
 
 
 class QuickCLIConfig:
     """
-    Main CLI configuration combining all command types.
+    Main CLI configuration for Quick Assistant.
 
-    Provides unified configuration for the Quick Assistant CLI tool,
-    including program description, examples, and all command configurations.
+    Provides configuration for the CLI tool including program description and examples.
     """
 
+    prog = "quick"
     description = "Quick Assistant - CLI tool for productivity"
-    epilog = "Examples:\n    quick --commit generate"
-
-    @classmethod
-    def get_config(cls) -> Dict[str, Any]:
-        """
-        Return complete parser configuration.
-
-        Returns:
-            Dictionary containing complete CLI configuration with keys:
-                - prog: Program name ("quick")
-                - description: CLI tool description text
-                - epilog: Usage examples displayed in help text
-                - commands: List of command configuration dictionaries
-        """
-        return {
-            "prog": "quick",
-            "description": cls.description,
-            "epilog": cls.epilog,
-            "commands": [CommitCLIArguments.get_config(), UpdateCLIArguments.get_config()],
-        }
+    epilog = "Examples:\n    quick commit\n    quick update"
 
 
-def create_parser(config: Dict[str, Any]) -> argparse.ArgumentParser:
+def create_parser() -> argparse.ArgumentParser:
     """
-    Create and configure a generic argument parser from configuration dictionary.
-
-    Args:
-        config: Dictionary containing parser configuration with keys:
-            - prog: Program name (default: "quick")
-            - description: Program description
-            - epilog: Text to display after help
-            - commands: List of command dictionaries with "flag", "help", and optional "choices" keys
+    Create and configure the argument parser with subcommands.
 
     Returns:
         Configured ArgumentParser instance ready for parsing CLI arguments.
     """
     parser = argparse.ArgumentParser(
-        prog=config.get("prog", "quick"),
-        description=config.get("description", ""),
+        prog=QuickCLIConfig.prog,
+        description=QuickCLIConfig.description,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=config.get("epilog", ""),
+        epilog=QuickCLIConfig.epilog,
     )
 
-    commands = config.get("commands", [])
-    if commands:
-        group = parser.add_mutually_exclusive_group()
-        for cmd in commands:
-            if "choices" in cmd:
-                group.add_argument(cmd["flag"], help=cmd["help"], choices=cmd["choices"])
-            elif "action" in cmd:
-                group.add_argument(cmd["flag"], help=cmd["help"], action=cmd["action"])
-            else:
-                group.add_argument(cmd["flag"], help=cmd["help"])
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    subparsers.add_parser("commit", help="Generate a commit message")
+    subparsers.add_parser("update", help="Update quick-assistant to the latest version")
 
     return parser

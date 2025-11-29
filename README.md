@@ -28,7 +28,7 @@ Get your API key at: https://aistudio.google.com/apikey
 #### Commit
 AI-powered git commit message generation with interactive flow.
 ```bash
-quick --commit generate
+quick commit
 ```
 
 ### Features
@@ -38,7 +38,8 @@ quick --commit generate
 - Informative error messages
 
 ### Examples
-- `quick --commit generate`
+- `quick commit`
+- `quick update`
 
 ### Uninstall
 

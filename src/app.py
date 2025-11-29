@@ -7,7 +7,7 @@ import asyncio
 from dotenv import load_dotenv
 from typing import List, Optional
 
-from common.arguments import CommandType, ParsedArgs, QuickCLIConfig, create_parser
+from common.arguments import CommandType, ParsedArgs, create_parser
 from common.updater import execute_update
 from domains.commit.command.commit import execute_commit
 
@@ -16,19 +16,17 @@ class QuickAssistant:
     def __init__(self):
         """Initialize the CLI application."""
         load_dotenv()
-        self.parser = create_parser(QuickCLIConfig.get_config())
+        self.parser = create_parser()
 
     def run(self, args: Optional[List[str]] = None) -> int:
         """Run the CLI application."""
         try:
-            parsed_args = ParsedArgs(
-                commit=getattr(self.parser.parse_args(args), "commit", None),
-                update=getattr(self.parser.parse_args(args), "update", None),
-            )
+            namespace = self.parser.parse_args(args)
+            parsed_args = ParsedArgs(command=getattr(namespace, "command", None))
 
             match parsed_args.get_command_type():
                 case CommandType.COMMIT:
-                    return asyncio.run(execute_commit(parsed_args.commit))
+                    return asyncio.run(execute_commit("generate"))
                 case CommandType.UPDATE:
                     return execute_update()
                 case CommandType.HELP:
