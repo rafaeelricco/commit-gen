@@ -81,10 +81,11 @@ def prompt_conventional(git_diff: str) -> str:
 
       <output_instructions>
         1. First, internally decide if the change is SMALL, MEDIUM, or LARGE.
-        2. Then output ONLY the final commit message text, with no explanation.
-        3. Do NOT wrap the commit message in quotes or code fences.
-        4. Always start with a Conventional Commits type prefix.
-        5. Respect the required format based on size:
+        2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
+        3. Then output ONLY the final commit message text, with no explanation.
+        4. Do NOT wrap the commit message in quotes or code fences.
+        5. Always start with a Conventional Commits type prefix and capitalize the first letter after the prefix.
+        6. Respect the required format based on size:
           - SMALL: single line only.
           - MEDIUM/LARGE:
             • Line 1: title line with type prefix.
@@ -145,7 +146,7 @@ def prompt_imperative(git_diff: str) -> str:
 
           <classification>SMALL</classification>
           <commit_message>
-            update info logger to include timestamp
+            Update info logger to include timestamp
           </commit_message>
         </example>
 
@@ -172,7 +173,7 @@ def prompt_imperative(git_diff: str) -> str:
 
           <classification>MEDIUM</classification>
           <commit_message>
-            add prompt_commit_message function for git diff analysis
+            Add prompt_commit_message function for git diff analysis
 
             - Add helper to generate commit messages from git diffs following our guidelines.
             - Includes initial implementation of `prompt_commit_message` and tests to validate basic usage.
@@ -196,15 +197,17 @@ def prompt_imperative(git_diff: str) -> str:
       <output_instructions>
         1. First, internally decide if the change is SMALL, MEDIUM, or LARGE
           according to the rules above.
-        2. Then output ONLY the final commit message text, with no explanation.
-        3. Do NOT wrap the commit message in quotes or code fences.
-        4. Respect the required format based on size:
+        2. Do NOT output the classification (SMALL/MEDIUM/LARGE) in your response.
+        3. Then output ONLY the final commit message text, with no explanation.
+        4. Start the commit message with a capital letter.
+        5. Do NOT wrap the commit message in quotes or code fences.
+        6. Respect the required format based on size:
           - SMALL: single line only.
           - MEDIUM/LARGE:
             • Line 1: title line.
             • Line 2: blank.
             • Remaining lines: each line is a bullet starting with "- ".
-        5. Inline code with single backticks is allowed in the bullet points.
+        7. Inline code with single backticks is allowed in the bullet points.
       </output_instructions>
 """
 
