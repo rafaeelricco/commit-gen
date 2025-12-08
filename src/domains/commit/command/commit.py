@@ -19,6 +19,9 @@ from rich.console import Console
 Action = Literal["generate"]
 Selection = Literal["commit", "commit_push", "regenerate", "adjust", "cancel"]
 
+PRIMARY_MODEL = "models/gemini-flash-latest"
+FALLBACK_MODEL = "models/gemini-flash-lite-latest"
+
 
 class MissingApiKey(BaseFrozen):
     pass
@@ -121,22 +124,40 @@ async def generate_message(
     convention: CommitConvention = CommitConvention.IMPERATIVE,
     custom_template: Optional[str] = None,
 ) -> Result[Union[Exception, EmptyAIResponse], str]:
-    result = await async_try_catch(lambda: _generate_message_impl(api_key, diff, convention, custom_template))
+    async def attempt(model: str):
+        return await async_try_catch(lambda: _generate_message_impl(api_key, diff, convention, custom_template, model))
+
+    result = await attempt(PRIMARY_MODEL)
     match result.inner:
         case Ok(value=msg):
             if not msg.strip():
                 return Result.err(EmptyAIResponse())
             return Result.ok(msg)
         case Err(error=e):
+            if is_rate_limit_error(e):
+                console = Console()
+                console.print("[yellow]Rate limited. Trying fallback model...[/yellow]")
+                fallback_result = await attempt(FALLBACK_MODEL)
+                match fallback_result.inner:
+                    case Ok(value=msg):
+                        if not msg.strip():
+                            return Result.err(EmptyAIResponse())
+                        return Result.ok(msg)
+                    case Err(error=fallback_err):
+                        return Result.err(fallback_err)
             return Result.err(e)
 
 
 async def _generate_message_impl(
-    api_key: str, diff: str, convention: CommitConvention, custom_template: Optional[str]
+    api_key: str,
+    diff: str,
+    convention: CommitConvention,
+    custom_template: Optional[str],
+    model: str = PRIMARY_MODEL,
 ) -> str:
     with spinner("Generating…", spinner_style="dots"):
         response = await genai.Client(api_key=api_key).aio.models.generate_content(
-            model="models/gemini-flash-latest",
+            model=model,
             contents=diff,
             config=types.GenerateContentConfig(
                 system_instruction=prompt_commit_message(diff, convention, custom_template),
@@ -149,17 +170,33 @@ async def _generate_message_impl(
 async def refine_message(
     api_key: str, current_message: str, adjustment: str, diff: str
 ) -> Result[Union[Exception, EmptyAIResponse], str]:
-    result = await async_try_catch(lambda: _refine_message_impl(api_key, current_message, adjustment, diff))
+    async def attempt(model: str):
+        return await async_try_catch(lambda: _refine_message_impl(api_key, current_message, adjustment, diff, model))
+
+    result = await attempt(PRIMARY_MODEL)
     match result.inner:
         case Ok(value=msg):
             if not msg.strip():
                 return Result.err(EmptyAIResponse())
             return Result.ok(msg)
         case Err(error=e):
+            if is_rate_limit_error(e):
+                console = Console()
+                console.print("[yellow]Rate limited. Trying fallback model...[/yellow]")
+                fallback_result = await attempt(FALLBACK_MODEL)
+                match fallback_result.inner:
+                    case Ok(value=msg):
+                        if not msg.strip():
+                            return Result.err(EmptyAIResponse())
+                        return Result.ok(msg)
+                    case Err(error=fallback_err):
+                        return Result.err(fallback_err)
             return Result.err(e)
 
 
-async def _refine_message_impl(api_key: str, current_message: str, adjustment: str, diff: str) -> str:
+async def _refine_message_impl(
+    api_key: str, current_message: str, adjustment: str, diff: str, model: str = PRIMARY_MODEL
+) -> str:
     system = (
         "You revise commit messages. Use the diff and the user's adjustment to produce a polished commit message. "
         "Preserve required formatting rules: SMALL=single line; MEDIUM/LARGE=title, blank line, bullets prefixed with '- '."
@@ -169,7 +206,7 @@ async def _refine_message_impl(api_key: str, current_message: str, adjustment: s
     )
     with spinner("Refining…", spinner_style="dots"):
         response = await genai.Client(api_key=api_key).aio.models.generate_content(
-            model="models/gemini-flash-latest",
+            model=model,
             contents=contents,
             config=types.GenerateContentConfig(system_instruction=system, response_mime_type="text/plain"),
         )
@@ -180,6 +217,11 @@ def _extract_text(response: types.GenerateContentResponse) -> str:
     candidates = getattr(response, "candidates", ()) or ()
     parts = tuple(p for c in candidates for p in (getattr(getattr(c, "content", None), "parts", ()) or ()))
     return "".join(text for p in parts if (text := getattr(p, "text", None)))
+
+
+def is_rate_limit_error(error: Exception) -> bool:
+    error_str = str(error).lower()
+    return "429" in error_str or "resource_exhausted" in error_str
 
 
 def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
