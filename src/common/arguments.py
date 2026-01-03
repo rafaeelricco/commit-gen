@@ -3,6 +3,7 @@ import argparse
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
 from enum import Enum
+from importlib.metadata import version as get_version
 
 
 class CommandType(Enum):
@@ -45,6 +46,8 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=QuickCLIConfig.epilog,
     )
+
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {get_version('quick-assistant')}")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
