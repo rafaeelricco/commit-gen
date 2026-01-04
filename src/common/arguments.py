@@ -3,7 +3,7 @@ import argparse
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
 from enum import Enum
-from importlib.metadata import version as get_version
+from importlib.metadata import PackageNotFoundError, version as get_version
 
 
 class CommandType(Enum):
@@ -39,6 +39,16 @@ class QuickCLIConfig:
     epilog = "Examples:\n    quick commit\n    quick update"
 
 
+PACKAGE_NAME = "quick-assistant"
+
+
+def resolve_version() -> str:
+    try:
+        return get_version(PACKAGE_NAME)
+    except PackageNotFoundError:
+        return "unknown"
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=QuickCLIConfig.prog,
@@ -47,7 +57,7 @@ def create_parser() -> argparse.ArgumentParser:
         epilog=QuickCLIConfig.epilog,
     )
 
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {get_version('quick-assistant')}")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {resolve_version()}")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
