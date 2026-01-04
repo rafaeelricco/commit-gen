@@ -11,7 +11,7 @@ from common.command.base_command_handler import BaseCommandHandler
 from common.command.execute_command_handler import json_response, execute_command_handler
 from common.config import CommitConvention, load_config, get_api_key
 from common.loading import spinner
-from common.prompts import prompt_commit_message, select_option, text_input
+from common.prompts import prompt_commit_message, select_option, text_input, confirm_prompt
 from common.result import Result, Ok, Err, async_try_catch
 from rich.console import Console
 
@@ -43,11 +43,17 @@ class EmptyAIResponse(BaseFrozen):
     pass
 
 
+class PushSkipped(BaseFrozen):
+    pass
+
+
 class UnsupportedAction(BaseFrozen):
     action: str
 
 
-CommitError = Union[MissingApiKey, NotGitRepo, GitError, NoStagedChanges, EmptyAIResponse, UnsupportedAction]
+CommitError = Union[
+    MissingApiKey, NotGitRepo, GitError, NoStagedChanges, EmptyAIResponse, UnsupportedAction, PushSkipped
+]
 
 
 class CommitState(BaseFrozen):
@@ -149,11 +155,7 @@ async def generate_message(
 
 
 async def _generate_message_impl(
-    api_key: str,
-    diff: str,
-    convention: CommitConvention,
-    custom_template: Optional[str],
-    model: str = PRIMARY_MODEL,
+    api_key: str, diff: str, convention: CommitConvention, custom_template: Optional[str], model: str = PRIMARY_MODEL
 ) -> str:
     with spinner("Generating…", spinner_style="dots"):
         response = await genai.Client(api_key=api_key).aio.models.generate_content(
@@ -242,15 +244,34 @@ def perform_commit(message: str, cwd: str) -> Result[GitError, str]:
             pass
 
 
-def perform_push(cwd: str) -> Result[GitError, str]:
-    result = subprocess.run(["git", "push"], capture_output=True, text=True, cwd=cwd)
+async def perform_push_or_publish(cwd: str) -> Result[Union[GitError, PushSkipped], str]:
+    upstream_check = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "@{u}"], capture_output=True, text=True, cwd=cwd
+    )
+
+    if upstream_check.returncode == 0:
+        result = subprocess.run(["git", "push"], capture_output=True, text=True, cwd=cwd)
+    else:
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True, cwd=cwd
+        )
+        branch = branch_result.stdout.strip()
+
+        publish = await confirm_prompt(f"Branch '{branch}' has no upstream. Publish to origin?")
+        if not publish:
+            return Result.err(PushSkipped())
+
+        result = subprocess.run(
+            ["git", "push", "--set-upstream", "origin", branch], capture_output=True, text=True, cwd=cwd
+        )
+
     output = (result.stdout or "") + (result.stderr or "")
     if result.returncode != 0:
         return Result.err(GitError(message=output.strip() or "Push failed"))
     return Result.ok(output)
 
 
-def handle_selection(selection: Selection, state: CommitState) -> Result[CommitError, LoopResult]:
+async def handle_selection(selection: Selection, state: CommitState) -> Result[CommitError, LoopResult]:
     match selection:
         case "commit":
             commit_result = perform_commit(state.message, state.cwd)
@@ -269,8 +290,17 @@ def handle_selection(selection: Selection, state: CommitState) -> Result[CommitE
                 case Err(error=git_err):
                     return Result[CommitError, LoopResult].err(git_err)
                 case Ok(value=commit_output):
-                    push_result = perform_push(state.cwd)
+                    push_result = await perform_push_or_publish(state.cwd)
                     match push_result.inner:
+                        case Err(error=PushSkipped()):
+                            return Result[CommitError, LoopResult].ok(
+                                CommandResponse(
+                                    message="commit",
+                                    commit_message=state.message,
+                                    action="commit",
+                                    git_output=commit_output,
+                                )
+                            )
                         case Err(error=push_err):
                             return Result[CommitError, LoopResult].err(push_err)
                         case Ok(value=push_output):
@@ -311,7 +341,7 @@ async def interaction_loop(state: CommitState, console: Console) -> Result[Commi
         selection = raw_selection  # type: ignore[assignment]
     else:
         selection = "cancel"
-    result = handle_selection(selection, state)
+    result = await handle_selection(selection, state)
 
     match result.inner:
         case Ok(value=loop_result):

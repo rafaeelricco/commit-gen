@@ -278,3 +278,11 @@ async def password_input(prompt: str) -> str | None:
         return result.strip() if result else None
     except (KeyboardInterrupt, EOFError):
         return None
+
+
+async def confirm_prompt(message: str, default: bool = True) -> bool:
+    try:
+        result = await questionary.confirm(message, default=default, style=PROMPT_STYLE).ask_async()
+        return result if result is not None else False
+    except (KeyboardInterrupt, EOFError):
+        return False
