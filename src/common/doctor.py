@@ -9,7 +9,7 @@ from common.result import Result, Ok, Err
 from rich.console import Console
 
 
-PACKAGE_NAME = "quick-assistant"
+PACKAGE_NAME = "commit-gen"
 
 
 class VersionRetrievalError(BaseFrozen):
@@ -104,7 +104,7 @@ def error_to_message(error: DoctorError) -> str:
 
 
 def _print_diagnostics(console: Console, info: DiagnosticsInfo) -> None:
-    console.print("Quick Assistant - System Diagnostics\n")
+    console.print("Commit Gen - System Diagnostics\n")
     console.print(f"Version: {info.version}")
     console.print(f"Platform: {info.platform}")
     console.print(f"Python: {info.python_version}")

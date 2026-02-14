@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Type check script for quick-assistant project
+# Type check script for commit-gen project
 # Uses mypy for static type checking
 
 set -e  # Exit on any error

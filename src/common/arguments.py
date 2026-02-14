@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version as get_version
 
 
 class CommandType(Enum):
-    COMMIT = "commit"
+    GENERATE = "generate"
     UPDATE = "update"
     SETUP = "setup"
     DOCTOR = "doctor"
@@ -21,8 +21,8 @@ class ParsedArgs(BaseModel):
 
     def get_command_type(self) -> CommandType:
         match self.command:
-            case "commit":
-                return CommandType.COMMIT
+            case "generate":
+                return CommandType.GENERATE
             case "update":
                 return CommandType.UPDATE
             case "setup":
@@ -33,13 +33,13 @@ class ParsedArgs(BaseModel):
                 return CommandType.HELP
 
 
-class QuickCLIConfig:
-    prog = "quick"
-    description = "Quick Assistant - CLI tool for productivity"
-    epilog = "Examples:\n    quick commit\n    quick update"
+class CommitGenCLIConfig:
+    prog = "commit"
+    description = "Commit Gen - AI-powered commit message generator"
+    epilog = "Examples:\n    commit generate\n    commit update"
 
 
-PACKAGE_NAME = "quick-assistant"
+PACKAGE_NAME = "commit-gen"
 
 
 def resolve_version() -> str:
@@ -51,19 +51,19 @@ def resolve_version() -> str:
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog=QuickCLIConfig.prog,
-        description=QuickCLIConfig.description,
+        prog=CommitGenCLIConfig.prog,
+        description=CommitGenCLIConfig.description,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=QuickCLIConfig.epilog,
+        epilog=CommitGenCLIConfig.epilog,
     )
 
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {resolve_version()}")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    subparsers.add_parser("commit", help="Generate a commit message")
-    subparsers.add_parser("update", help="Update quick-assistant to the latest version")
-    subparsers.add_parser("setup", help="Configure quick-assistant")
+    subparsers.add_parser("generate", help="Generate a commit message")
+    subparsers.add_parser("update", help="Update commit-gen to the latest version")
+    subparsers.add_parser("setup", help="Configure commit-gen")
     subparsers.add_parser("doctor", help="Diagnose installation and PATH issues")
 
     return parser

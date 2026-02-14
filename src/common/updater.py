@@ -17,12 +17,12 @@ from common.config import get_config_dir
 from common.result import Err, Ok, Result, try_catch
 
 
-PACKAGE_NAME = "quick-assistant"
+PACKAGE_NAME = "commit-gen"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 CHECK_INTERVAL = 3600 * 8  # 8 hours
 CACHE_FILE = get_config_dir() / "update-cache.json"
 UV_TOOL_PATH_PART = "uv"
-UV_TOOL_NAME = "quick-assistant"
+UV_TOOL_NAME = "commit-gen"
 
 
 class NetworkError(BaseFrozen):
@@ -227,7 +227,7 @@ def check_and_update() -> None:
             pass
 
     if Version(latest) > Version(current):
-        console.print(f"Updating quick-assistant {current} → {latest}...")
+        console.print(f"Updating commit-gen {current} → {latest}...")
         update_result = update_package()
         match update_result.inner:
             case Ok():
@@ -261,7 +261,7 @@ def execute_update() -> int:
         console.print(f"Already at latest version ({current}).")
         return 0
 
-    console.print(f"Updating quick-assistant {current} → {latest}...")
+    console.print(f"Updating commit-gen {current} → {latest}...")
     update_result = update_package()
     match update_result.inner:
         case Ok(value=method):

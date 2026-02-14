@@ -84,7 +84,7 @@ async def _validate_api_key_impl(api_key: str) -> None:
 
 
 async def execute_setup_flow(console: Console) -> Result[SetupError, SetupResponse]:
-    console.print("\n[bold]Quick Assistant Setup[/bold]\n")
+    console.print("\n[bold]Commit Gen Setup[/bold]\n")
 
     convention = await prompt_convention(console)
     if convention is None:

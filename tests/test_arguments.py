@@ -14,7 +14,7 @@ import common.arguments as arguments
 
 class ResolveVersionTests(unittest.TestCase):
     def test_version_argument_falls_back_when_metadata_missing(self) -> None:
-        with patch("common.arguments.get_version", side_effect=PackageNotFoundError("quick-assistant")):
+        with patch("common.arguments.get_version", side_effect=PackageNotFoundError("commit-gen")):
             parser = arguments.create_parser()
             with redirect_stdout(io.StringIO()):
                 with self.assertRaises(SystemExit) as context:

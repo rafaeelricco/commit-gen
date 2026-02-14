@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Lint script for quick-assistant project
+# Lint script for commit-gen project
 # Uses ruff for fast Python linting and formatting
 
 set -e  # Exit on any error

@@ -1,5 +1,5 @@
 [project]
-name = "quick-assistant"
+name = "commit-gen"
 version = "0.2.9"
 description = "Global CLI tool for productivity"
 authors = [{ name = "Rafael Ricco", email = "rafaelricco10@gmail.com" }]
@@ -20,16 +20,16 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/rafaeelricco/quick-assistant"
-Repository = "https://github.com/rafaeelricco/quick-assistant"
+Homepage = "https://github.com/rafaeelricco/commit-gen"
+Repository = "https://github.com/rafaeelricco/commit-gen"
 
 [project.scripts]
-quick = "app:main"
+commit = "app:main"
 
 [dependency-groups]
 dev = [
     "mypy>=1.17.0",
-    "quick-assistant",
+    "commit-gen",
     "ruff>=0.12.4",
     "types-requests>=2.31.0",
 ]
@@ -39,7 +39,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-quick-assistant = { workspace = true }
+commit-gen = { workspace = true }
 
 [tool.uv.workspace]
 members = [

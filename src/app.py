@@ -46,7 +46,7 @@ def initialize() -> None:
 def run_command(command_type: CommandType) -> int:
     """Execute the appropriate command handler."""
     match command_type:
-        case CommandType.COMMIT:
+        case CommandType.GENERATE:
             return asyncio.run(execute_commit("generate"))
         case CommandType.UPDATE:
             return execute_update()

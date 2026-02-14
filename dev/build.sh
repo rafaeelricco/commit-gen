@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # =============================================================================
-# Build Script for Quick Assistant
+# Build Script for Commit Gen
 # =============================================================================
 #
 # DESCRIPTION:
-#   Builds and installs a clean version of the Quick Assistant CLI tool.
+#   Builds and installs a clean version of the Commit Gen CLI tool.
 #   Performs cleanup of any existing installations before building fresh.
 #
 # FEATURES:
@@ -26,7 +26,7 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-echo "󰏖 Building Quick Assistant CLI..."
+echo "󰏖 Building Commit Gen CLI..."
 echo ""
 
 # =============================================================================
@@ -43,14 +43,14 @@ echo ""
 # =============================================================================
 clean() {
     echo "󰅖 Cleaning existing installation..."
-    uv tool uninstall quick-assistant 2>/dev/null || true
-    rm -rf ~/.local/share/uv/tools/quick-assistant 2>/dev/null || true
+    uv tool uninstall commit-gen 2>/dev/null || true
+    rm -rf ~/.local/share/uv/tools/commit-gen 2>/dev/null || true
 }
 
 # =============================================================================
 # FUNCTION: build
 # =============================================================================
-# Performs clean build and installation of the Quick Assistant CLI tool.
+# Performs clean build and installation of the Commit Gen CLI tool.
 # 
 # BEHAVIOR:
 #   1. Cleans any existing installation
@@ -70,11 +70,11 @@ build() {
         uv tool update-shell
     fi
    
-    echo "󰄬 Global 'quick' command ready"
+    echo "󰄬 Global 'commit' command ready"
     echo ""
 }
 
 # Main build process
 build
 
-echo "󰄬 Build complete! The 'quick' command is now available globally."
+echo "󰄬 Build complete! The 'commit' command is now available globally."

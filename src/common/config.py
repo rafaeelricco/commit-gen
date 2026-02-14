@@ -63,7 +63,7 @@ def get_home_path() -> Path:
 
 
 def get_config_dir() -> Path:
-    return get_home_path() / ".quick-assistant"
+    return get_home_path() / ".commit-gen"
 
 
 def get_config_path() -> Path:

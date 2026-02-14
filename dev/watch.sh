@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # =============================================================================
-# Development Watch Script for Quick Assistant
+# Development Watch Script for Commit Gen
 # =============================================================================
 #
 # DESCRIPTION:
-#   Automatically watches for file changes in the Quick Assistant project and
+#   Automatically watches for file changes in the Commit Gen project and
 #   updates the globally installed CLI tool by calling the build.sh script.
 #   This enables rapid development by eliminating the need to manually 
 #   reinstall the tool after every code change.
@@ -52,14 +52,14 @@ fi
 
 echo "󰍉 Development mode - watching for changes with fswatch..."
 echo "󰈙 Monitoring: src/*.py, pyproject.toml"
-echo "󰑓 Auto-updating global 'quick' command"
+echo "󰑓 Auto-updating global 'commit' command"
 echo "󰜺 Press Ctrl+C to stop"
 echo ""
 
 # =============================================================================
 # FUNCTION: install_cli
 # =============================================================================
-# Performs initial installation of the Quick Assistant CLI tool.
+# Performs initial installation of the Commit Gen CLI tool.
 # 
 # BEHAVIOR:
 #   Delegates to the build.sh script which handles:
@@ -76,8 +76,8 @@ install_cli() {
 }
 
 # Check if tool is already installed before attempting initial install
-if uv tool list | grep -q "quick-assistant"; then
-    echo "󰄬 quick-assistant already installed, skipping initial install"
+if uv tool list | grep -q "commit-gen"; then
+    echo "󰄬 commit-gen already installed, skipping initial install"
     echo ""
 else
     # Initial install
