@@ -9,7 +9,7 @@ from common.command.base_command_handler import BaseCommandHandler
 from common.command.execute_command_handler import json_response, execute_command_handler
 from common.config import CommitConvention, Config, ConfigWriteError, save_config
 from common.loading import spinner
-from common.prompts import select_option, password_input
+from common.prompts import select_option, password_input, confirm_prompt
 from common.result import Result, Ok, Err, async_try_catch
 
 
@@ -118,7 +118,20 @@ async def execute_setup_flow(console: Console) -> Result[SetupError, SetupRespon
         case Ok():
             pass
 
-    from common.config import get_config_path
+    from common.config import get_config_path, get_legacy_config_dir
+
+    # Legacy config cleanup
+    legacy_path = get_legacy_config_dir()
+    if legacy_path.exists():
+        console.print(f"\n[yellow]Legacy configuration found at {legacy_path}[/yellow]")
+        if await confirm_prompt("Delete legacy configuration folder?", default=True):
+            import shutil
+
+            try:
+                shutil.rmtree(legacy_path)
+                console.print("[green]Legacy configuration deleted.[/green]")
+            except Exception as e:
+                console.print(f"[red]Failed to delete legacy configuration: {e}[/red]")
 
     return Result.ok(SetupResponse(message="setup_complete", config_path=str(get_config_path())))
 

@@ -66,6 +66,11 @@ def get_config_dir() -> Path:
     return get_home_path() / ".commit-gen"
 
 
+def get_legacy_config_dir() -> Path:
+    return get_home_path() / ".quick-assistant"
+
+
+
 def get_config_path() -> Path:
     return get_config_dir() / "config.json"
 
